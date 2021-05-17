@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
-use crate::node::Node;
+use crate::node::RawNode;
 use std::borrow::Borrow;
 
 pub struct AdaptiveRadixTree<K, V> {
-    root: Option<Box<dyn Node>>,
+    root: Option<Box<dyn RawNode>>,
     _phantom: PhantomData<(K, V)>,
 }
 

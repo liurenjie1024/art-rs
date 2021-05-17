@@ -5,7 +5,7 @@ pub(in crate::node) struct NodeBase {
 }
 
 impl NodeBase {
-    pub(in crate::node) unsafe fn get_empty_value<V>(&self) -> Option<&V> {
+    pub(in crate::node) unsafe fn get_empty_value(&self) -> Option<*const u8> {
         if self.empty_value.is_null() {
             None
         } else {
@@ -13,10 +13,10 @@ impl NodeBase {
         }
     }
 
-    pub(in crate::node) unsafe fn search<V>(&self, keys: &[u8]) -> Option<&V> {
+    pub(in crate::node) unsafe fn search(&self, keys: &[u8]) -> Option<*const u8> {
         match self.match_prefix(keys) {
             PrefixMatchResult::Fail => None,
-            PrefixMatchResult::Exact => self.get_empty_value::<V>(),
+            PrefixMatchResult::Exact => self.get_empty_value(),
             PrefixMatchResult::Extra => todo!()
         }
     }

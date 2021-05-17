@@ -25,9 +25,9 @@ pub(crate) enum ChildType {
     Value,
 }
 
-pub(crate) trait Node {
-    fn get_type() -> NodeType;
-    fn search<V>(&self, keys: &[u8]) -> Option<&V>;
+pub(crate) trait RawNode {
+    fn get_type() -> NodeType where Self: Sized;
+    fn search(&self, keys: &[u8]) -> *const u8;
 }
 
 pub(crate) struct ChildPtr {
@@ -49,18 +49,18 @@ impl ChildPtr {
         self.child_ptr.is_null()
     }
 
-    pub(crate) unsafe fn search<V>(&self, keys: &[u8]) -> Option<&V> {
+    pub(crate) unsafe fn search(&self, keys: &[u8]) -> Option<*const u8> {
         if self.is_empty() {
             None
         } else {
             match self.child_type {
-                ChildType::Node(_) => self.to_node().and_then(|node| node.search(keys)),
+                ChildType::Node(_) => self.to_node().map(|node| node.search(keys)),
                 ChildType::Value => self.to_value()
             }
         }
     }
 
-    unsafe fn to_node(&self) -> Option<&dyn Node> {
+    unsafe fn to_node(&self) -> Option<&dyn RawNode> {
         if !self.is_empty() {
             match self.child_type {
                 ChildType::Node(NodeType::Node4) => Some(&*transmute::<*mut u8, *mut Node4>(self.child_ptr)),
@@ -74,10 +74,10 @@ impl ChildPtr {
         }
     }
 
-    unsafe fn to_value<V>(&self) -> Option<&V> {
+    unsafe fn to_value(&self) -> Option<*const u8> {
         if !self.is_empty() {
             match self.child_type {
-                ChildType::Value => Some(&*transmute::<*mut u8, *mut V>(self.child_ptr)),
+                ChildType::Value => Some(transmute::<*mut u8, *const u8>(self.child_ptr)),
                 _ => panic!("Inner node should not reach here!")
             }
         } else {

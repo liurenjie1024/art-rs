@@ -1,4 +1,4 @@
-use crate::node::{ChildType, Node, NodeType};
+use crate::node::{ChildType, RawNode, NodeType};
 use crate::node::base::NodeBase;
 use crate::node::node256::NODE256_CAPACITY;
 
@@ -12,12 +12,12 @@ pub(in crate::node) struct Node48 {
     children_types: [ChildType; NODE48_CAPACITY],
 }
 
-impl Node for Node48 {
+impl RawNode for Node48 {
     fn get_type() -> NodeType {
         NodeType::Node48
     }
 
-    fn search<V>(&self, _keys: &[u8]) -> Option<&V> {
+    fn search(&self, _keys: &[u8]) -> *const u8 {
         todo!()
     }
 }

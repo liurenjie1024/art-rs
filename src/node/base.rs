@@ -1,28 +1,32 @@
+use std::mem::MaybeUninit;
+
+const MAX_PREFIX_LEN: usize = 16;
+
 pub(in crate::node) struct NodeBase {
-    prefix: Vec<u8>,
+    partial_prefix: MaybeUninit<[u8;MAX_PREFIX_LEN]>,
+    partial_prefix_len: usize,
     empty_value: *mut u8,
     children_count: u8,
 }
 
 impl NodeBase {
-    pub(in crate::node) unsafe fn get_empty_value(&self) -> Option<*const u8> {
-        if self.empty_value.is_null() {
-            None
-        } else {
-            Some(&*self.empty_value)
-        }
+    pub(in crate::node) fn search(&self, keys: &[u8]) -> PrefixMatchResult {
+        self.match_prefix(keys)
     }
 
-    pub(in crate::node) unsafe fn search(&self, keys: &[u8]) -> Option<*const u8> {
-        match self.match_prefix(keys) {
-            PrefixMatchResult::Fail => None,
-            PrefixMatchResult::Exact => self.get_empty_value(),
-            PrefixMatchResult::Extra => todo!()
-        }
+    #[inline]
+    pub(in crate::node) fn get_empty_value(&self) -> *const u8 {
+        self.empty_value
     }
+
+    #[inline]
+    pub(in crate::node) fn get_prefix_size(&self) -> usize {
+        self.prefix.len()
+    }
+
 
     fn match_prefix(&self, keys: &[u8]) -> PrefixMatchResult {
-        let prefix_size = self.prefix_size();
+        let prefix_size = self.get_prefix_size();
         if keys.len() < prefix_size {
             PrefixMatchResult::Fail
         } else if keys.len() == prefix_size {
@@ -39,15 +43,10 @@ impl NodeBase {
             }
         }
     }
-
-    #[inline]
-    fn prefix_size(&self) -> usize {
-        self.prefix.len()
-    }
 }
 
-enum PrefixMatchResult {
+pub(in crate::node) enum PrefixMatchResult {
     Fail,
     Exact,
-    Extra
+    Extra,
 }

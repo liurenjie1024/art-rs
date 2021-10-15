@@ -1,8 +1,15 @@
 use std::ptr::NonNull;
 
-pub(in crate::node) struct Leaf {
+pub struct LeafRange<V> {
+    start: Option<NonNull<Leaf<V>>>,
+    end: Option<NonNull<Leaf<V>>>
+}
+
+pub(crate) type LeafRef<V> = NonNull<Leaf<V>>;
+
+pub struct Leaf<V> {
     key: Vec<u8>,
-    value: NonNull<u8>,
-    prev: *mut Leaf,
-    next: *mut Leaf,
+    value: V,
+    prev: Option<NonNull<Leaf<V>>>,
+    next: Option<NonNull<Leaf<V>>>
 }

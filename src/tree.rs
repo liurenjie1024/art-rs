@@ -1,13 +1,13 @@
 use std::marker::PhantomData;
-use crate::node::RawNode;
+use crate::node::{NodeRef, RawNode};
 use std::borrow::Borrow;
 
-pub struct AdaptiveRadixTree<K, V> {
-    root: Option<Box<dyn RawNode>>,
-    _phantom: PhantomData<(K, V)>,
+pub struct AdaptiveRadixTreeMap<K, V> {
+    root: Option<NodeRef<V>>,
+    _phantom: PhantomData<K>,
 }
 
-impl<K, V> AdaptiveRadixTree<K, V> {
+impl<K, V> AdaptiveRadixTreeMap<K, V> {
     pub fn new() -> Self {
         Self {
             root: None,

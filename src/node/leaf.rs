@@ -13,3 +13,9 @@ pub struct Leaf<V> {
     prev: Option<NonNull<Leaf<V>>>,
     next: Option<NonNull<Leaf<V>>>
 }
+
+impl<V> Leaf<V> {
+    pub(crate) fn key(&self) -> &[u8] {
+        &self.key
+    }
+}

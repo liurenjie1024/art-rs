@@ -3,6 +3,7 @@ use crate::node::leaf::LeafNodeRef;
 use crate::node::search::{SearchArgument, SearchResult};
 use crate::node::{NodeBase, NodeRef};
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 const MAX_PREFIX_LEN: usize = 16;
@@ -28,10 +29,10 @@ pub(crate) struct InternalNodeBase<V> {
 pub(crate) struct InternalNode<C, V> {
   base: InternalNodeBase<C>,
   children: C,
+  marker: PhantomData<V>,
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
 pub(crate) struct InternalNodeRef<V> {
   inner: NonNull<InternalNodeBase<V>>,
 }
@@ -51,9 +52,17 @@ impl<V> InternalNodeRef<V> {
   }
 }
 
+impl<V> Clone for InternalNodeRef<V> {
+  fn clone(&self) -> Self {
+    Self { inner: self.inner }
+  }
+}
+
+impl<V> Copy for InternalNodeRef<V> {}
+
 impl<V> InternalNodeRef<V> {
   #[inline(always)]
-  fn inner(self) -> &InternalNodeBase<V> {
+  fn inner(&self) -> &InternalNodeBase<V> {
     unsafe { self.inner.as_ref() }
   }
 
@@ -64,11 +73,11 @@ impl<V> InternalNodeRef<V> {
     }
   }
 
-  pub(crate) fn find_child(self, k: u8) -> Option<NodeRef<V>> {
+  pub(crate) fn find_child(self, _k: u8) -> Option<NodeRef<V>> {
     unimplemented!()
   }
 
-  pub(crate) fn find_next_child(self, k: u8) -> Option<NodeRef<V>> {
+  pub(crate) fn find_next_child(self, _k: u8) -> Option<NodeRef<V>> {
     unimplemented!()
   }
 
@@ -85,10 +94,10 @@ impl<V> InternalNodeRef<V> {
         _ => Found(self.minimum_leaf()),
       }
     } else {
-      let partial_key_of_prefix = partial_key[0..partial_prefix.len()];
+      let partial_key_of_prefix = &partial_key[0..partial_prefix.len()];
       match partial_key_of_prefix.cmp(partial_prefix) {
         Ordering::Less => Found(self.minimum_leaf()),
-        Ordering::Equal => GoDown,
+        Ordering::Equal => GoDown(arg.depth() + partial_prefix.len()),
         Ordering::Greater => GoUp,
       }
     }
@@ -99,7 +108,7 @@ impl<V> InternalNodeRef<V> {
     leaf_ref: LeafNodeRef<V>,
     arg: SearchArgument,
   ) -> SearchResult<LeafNodeRef<V>> {
-    let leaf_node = unsafe { leaf_ref.as_ref() };
+    let leaf_node = leaf_ref.inner();
     let partial_key = arg.partial_key();
     let partial_leaf_key = &leaf_node.key()[arg.depth()..];
     if partial_key.len() <= partial_leaf_key.len() {
@@ -108,10 +117,10 @@ impl<V> InternalNodeRef<V> {
         _ => Found(leaf_ref),
       }
     } else {
-      let partial_key_of_leaf = partial_key[0..partial_leaf_key.len()];
+      let partial_key_of_leaf = &partial_key[0..partial_leaf_key.len()];
       match partial_key_of_leaf.cmp(partial_leaf_key) {
         Ordering::Greater => GoUp,
-        Ordering::Equal => GoDown,
+        Ordering::Equal => GoDown(arg.depth() + partial_leaf_key.len()),
         Ordering::Less => Found(leaf_ref),
       }
     }

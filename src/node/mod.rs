@@ -3,15 +3,14 @@ use std::ptr::NonNull;
 
 mod internal;
 use internal::*;
+
 mod node16;
 mod node256;
 mod node4;
 mod node48;
 
 mod leaf;
-
 use leaf::*;
-
 mod search;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
@@ -34,6 +33,14 @@ pub(crate) struct NodeBase<V> {
 pub(crate) struct NodeRef<V> {
   inner: NonNull<NodeBase<V>>,
 }
+
+impl<V> Clone for NodeRef<V> {
+  fn clone(&self) -> Self {
+    Self { inner: self.inner }
+  }
+}
+
+impl<V> Copy for NodeRef<V> {}
 
 pub(crate) enum NodeKind<V> {
   Internal(InternalNodeRef<V>),

@@ -6,10 +6,17 @@ pub struct LeafRange<V> {
   end: Option<LeafNodeRef<V>>,
 }
 
-#[derive(Copy, Clone)]
 pub(crate) struct LeafNodeRef<V> {
   inner: NonNull<LeafNode<V>>,
 }
+
+impl<V> Clone for LeafNodeRef<V> {
+  fn clone(&self) -> Self {
+    Self { inner: self.inner }
+  }
+}
+
+impl<V> Copy for LeafNodeRef<V> {}
 
 pub struct LeafNode<V> {
   key: Vec<u8>,
@@ -40,7 +47,7 @@ impl<V> LeafNodeRef<V> {
     }
   }
 
-  fn inner(self) -> &LeafNode<V> {
+  pub(crate) fn inner(&self) -> &LeafNode<V> {
     unsafe { self.inner.as_ref() }
   }
 }

@@ -13,7 +13,7 @@ pub(crate) enum SearchResult<R> {
   Found(R),
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub(crate) struct SearchArgument<'a> {
   key: &'a [u8],
   depth: usize,
@@ -24,22 +24,24 @@ impl<V> NodeRef<V> {
   pub(crate) fn find_lower_bound_node(self, key: &[u8]) -> Option<LeafNodeRef<V>> {
     let mut stack = Vec::<SearchStackEntry<V>>::with_capacity(DEFAULT_TREE_DEPTH);
 
-    let cur = self;
+    let mut cur = self;
     let mut arg = SearchArgument { key, depth: 0 };
 
     loop {
       match cur.downcast() {
         NodeKind::Internal(node) => match node.find_lower_bound(arg) {
           SearchResult::GoUp => break,
-          SearchResult::Found(ret) => Some(ret),
+          SearchResult::Found(ret) => {
+            return Some(ret);
+          }
           SearchResult::GoDown(new_depth) => {
             let k = key[new_depth];
-            match node.find_child(k) {
-              Some(c) => {
-                stack.push(SearchStackEntry { node, key: k });
-                arg.depth = new_depth + 1;
-              }
-              None => break,
+            if let Some(c) = node.find_child(k) {
+              stack.push(SearchStackEntry { node, key: k });
+              arg.depth = new_depth + 1;
+              cur = c;
+            } else {
+              break;
             }
           }
         },
@@ -71,7 +73,7 @@ impl<'a> SearchArgument<'a> {
     if self.depth >= self.key.len() {
       &[0u8; 0]
     } else {
-      self.key[self.depth..]
+      &self.key[self.depth..]
     }
   }
 

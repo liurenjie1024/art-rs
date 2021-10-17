@@ -15,18 +15,65 @@ mod internal;
 use internal::*;
 mod leaf;
 use leaf::*;
+use crate::node::NodeRef::{Node16, Node256, Node4, Node48};
 
+const DEFAULT_TREE_DEPTH: usize = 16;
+
+#[derive(Copy, Clone)]
 pub(crate) enum NodeRef<V> {
     Node4(InternalNodeRef<Node4Children<V>, V>),
     Node16(InternalNodeRef<Node16Children<V>, V>),
     Node48(InternalNodeRef<Node48Children<V>, V>),
     Node256(InternalNodeRef<Node256Children<V>, V>),
-    Leaf(LeafRef<V>)
+    Leaf(LeafNodeRef<V>)
+}
+
+struct SearchStackEntry<V> {
+    node: NodeRef<V>,
+    key: u8
+}
+
+pub(crate) enum SearchResult<R> {
+    GoUp,
+    GoDown(usize),
+    Found(R),
+}
+
+pub(crate) struct SearchArgument<'a> {
+    key: &'a [u8],
+    depth: usize,
 }
 
 impl<V> NodeRef<V> {
-    pub(crate) fn lower_bound(&self, _key: &[u8]) -> Option<LeafRef<V>> {
-        unimplemented!()
+    /// Find first leaf node, whose keys is not less than input key.
+    pub(crate) fn find_lower_bound_node(&self, _key: &[u8]) -> Option<LeafNodeRef<V>> {
+        let mut stack = Vec::<SearchStackEntry<V>>::with_capacity(DEFAULT_TREE_DEPTH);
+
+        let cur = self.clone();
+
+        loop {
+
+        }
+    }
+
+    fn search_lower_bound(&self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
+        unsafe {
+            match self {
+                Node4(node) => node.as_ref().find_lower_bound(arg),
+                Node16(node) => node.as_ref().find_lower_bound(arg),
+                Node48(node) => node.as_ref().find_lower_bound(arg),
+                Node256(node) => node.as_ref().find_lower_bound(arg),
+                Leaf(node) => node.as_ref().find_lower_bound(arg),
+            }
+        }
+    }
+}
+
+
+impl<'a> SearchArgument<'a> {
+    #[inline(always)]
+    pub(crate) fn partial_key(&self) -> &[u8] {
+        self.key[depth..]
     }
 }
 

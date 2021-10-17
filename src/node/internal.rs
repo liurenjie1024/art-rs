@@ -2,16 +2,19 @@ use std::cmp::Ordering;
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 use crate::node::internal::SearchResult::{Found, FoundSelf, GoDown, GoUp};
-use crate::node::leaf::LeafRef;
+use crate::node::leaf::LeafNodeRef;
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node48::Node48Children;
 use crate::node::node4::Node4Children;
-use crate::node::NodeRef;
+use crate::node::{NodeRef, SearchArgument, SearchResult};
 
 const MAX_PREFIX_LEN: usize = 16;
 
-pub(crate) type InternalNodeRef<C, V> = NonNull<InternalNode<C, V>>;
+#[derive(Copy, Clone)]
+pub(crate) struct InternalNodeRef<C, V> {
+    inner: NonNull<InternalNode<C, V>>,
+}
 
 struct PartialPrefixData {
     partial_prefix: [u8; MAX_PREFIX_LEN],
@@ -20,7 +23,7 @@ struct PartialPrefixData {
 
 enum PartialKey<V> {
     PartialPrefix(PartialPrefixData),
-    Leaf(LeafRef<V>),
+    Leaf(LeafNodeRef<V>),
 }
 
 pub(in crate::node) struct InternalNode<C, V> {
@@ -31,23 +34,6 @@ pub(in crate::node) struct InternalNode<C, V> {
 
 trait ChildrenContainer {}
 
-pub(crate) enum SearchResult<R> {
-    GoUp,
-    GoDown,
-    Found(R),
-}
-
-pub(crate) struct SearchArgument<'a> {
-    key: &'a [u8],
-    depth: usize,
-}
-
-impl<'a> SearchArgument<'a> {
-    #[inline(always)]
-    fn partial_key(&self) -> &[u8] {
-        self.key[depth..]
-    }
-}
 
 impl PartialPrefixData {
     #[inline(always)]
@@ -56,17 +42,20 @@ impl PartialPrefixData {
     }
 }
 
-impl<C, V> InternalNode<C, V> {
-    pub(crate) fn find_lower_bound(&self, arg: SearchArgument) -> SearchResult<LeafRef<V>> {
-        match &self.partial_key {
+impl<C, V> InternalNodeRef<C, V> {
+    #[inline(always)]
+    fn inner(&self) -> &InternalNode<C, V> { unsafe { self.inner.as_ref() } }
+
+    pub(crate) fn find_lower_bound(self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
+        match &self.inner().partial_key {
             PartialKey::PartialPrefix(data) => self.lower_bound_with_partial_prefix(data, arg),
             PartialKey::Leaf(leaf) => self.lower_bound_with_leaf(*leaf, arg)
         }
     }
 
-    fn lower_bound_with_partial_prefix<'a>(&self,
-                                           partial_prefix_data: &PartialPrefixData,
-                                           arg: SearchArgument<'a>) -> SearchResult<LeafRef<V>> {
+    fn lower_bound_with_partial_prefix(self,
+                                       partial_prefix_data: &PartialPrefixData,
+                                       arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
         let partial_key = arg.partial_key();
         let partial_prefix = partial_prefix_data.partial_prefix();
         if partial_key.len() <= partial_prefix.len() {
@@ -84,9 +73,9 @@ impl<C, V> InternalNode<C, V> {
         }
     }
 
-    fn lower_bound_with_leaf(&self,
-                             leaf_ref: LeafRef<V>,
-                             arg: SearchArgument) -> SearchResult<LeafRef<V>> {
+    fn lower_bound_with_leaf(self,
+                             leaf_ref: LeafNodeRef<V>,
+                             arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
         let leaf_node = unsafe { leaf_ref.as_ref() };
         let partial_key = arg.partial_key();
         let partial_leaf_key = &leaf_node.key()[arg.depth..];
@@ -105,7 +94,12 @@ impl<C, V> InternalNode<C, V> {
         }
     }
 
-    fn minimum_leaf(&self) -> LeafRef<V> {
+    fn minimum_leaf(self) -> LeafNodeRef<V> {
         unimplemented!()
     }
+}
+
+
+impl<C, V> InternalNode<C, V> {
+
 }

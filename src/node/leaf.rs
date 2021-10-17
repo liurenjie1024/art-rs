@@ -1,54 +1,46 @@
-use std::cmp::Ordering;
+use crate::node::search::SearchArgument;
 use std::ptr::NonNull;
-use crate::node::{SearchArgument, SearchResult};
-use crate::node::SearchResult::{Found, GoDown, GoUp};
 
 pub struct LeafRange<V> {
-    start: Option<LeafNodeRef<V>>,
-    end: Option<LeafNodeRef<V>>
+  start: Option<LeafNodeRef<V>>,
+  end: Option<LeafNodeRef<V>>,
 }
 
 #[derive(Copy, Clone)]
 pub(crate) struct LeafNodeRef<V> {
-    inner: NonNull<LeafNode<V>>
+  inner: NonNull<LeafNode<V>>,
 }
 
 pub struct LeafNode<V> {
-    key: Vec<u8>,
-    value: V,
-    prev: Option<NonNull<LeafNode<V>>>,
-    next: Option<NonNull<LeafNode<V>>>
+  key: Vec<u8>,
+  value: V,
+  prev: Option<NonNull<LeafNode<V>>>,
+  next: Option<NonNull<LeafNode<V>>>,
 }
 
 impl<V> LeafNode<V> {
-    pub(crate) fn key(&self) -> &[u8] {
-        &self.key
-    }
+  pub(crate) fn key(&self) -> &[u8] {
+    &self.key
+  }
 }
 
 impl<V> LeafNodeRef<V> {
-    pub(crate) fn find_lower_bound(self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
-        let partial_key = arg.partial_key();
-        let partial_leaf_key = &self.key()[arg.depth..];
-        if partial_key.len() <= partial_leaf_key.len() {
-            match partial_key.cmp(partial_leaf_key) {
-                Ordering::Greater => GoUp,
-                _ => Found(leaf_ref)
-            }
-        } else {
-            let partial_key_of_leaf = partial_key[0..partial_leaf_key.len()];
-            match partial_key_of_leaf.cmp(partial_leaf_key) {
-                Ordering::Less => unsafe {
-                    Found(LeafNodeRef::new_unchecked(&mut *self))
-                },
-                _ => GoUp,
-            }
-        }
-    }
+  pub(crate) fn new(inner: NonNull<LeafNode<V>>) -> Self {
+    Self { inner }
+  }
 
-    fn inner(&self) -> &LeafNode<V> {
-        unsafe {
-            self.inner.as_ref()
-        }
+  pub(crate) fn is_lower_bound(self, arg: SearchArgument) -> bool {
+    let partial_key = arg.partial_key();
+    let partial_leaf_key = &self.inner().key()[arg.depth()..];
+    if partial_key.len() <= partial_leaf_key.len() {
+      partial_key <= partial_leaf_key
+    } else {
+      let partial_key_of_leaf = &partial_key[0..partial_leaf_key.len()];
+      partial_key_of_leaf < partial_leaf_key
     }
+  }
+
+  fn inner(self) -> &LeafNode<V> {
+    unsafe { self.inner.as_ref() }
+  }
 }

@@ -1,5 +1,5 @@
-pub mod tree;
 mod node;
+pub mod tree;
 
 use std::collections::btree_map::BTreeMap;
 //

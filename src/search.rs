@@ -1,5 +1,5 @@
-use crate::node::internal::InternalNodeRef;
-use crate::node::leaf::LeafNodeRef;
+use crate::node::InternalNodeRef;
+use crate::node::LeafNodeRef;
 use crate::node::{NodeKind, NodeRef, DEFAULT_TREE_DEPTH};
 
 struct SearchStackEntry<V> {

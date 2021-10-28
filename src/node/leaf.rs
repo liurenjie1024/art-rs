@@ -1,4 +1,4 @@
-use crate::node::search::SearchArgument;
+use crate::search::SearchArgument;
 use std::ptr::NonNull;
 
 pub struct LeafRange<V> {

@@ -1,17 +1,16 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-mod internal;
-use internal::*;
+pub(crate) use internal::*;
+pub(crate) use leaf::*;
 
+mod internal;
 mod node16;
 mod node256;
 mod node4;
 mod node48;
 
 mod leaf;
-use leaf::*;
-mod search;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
 

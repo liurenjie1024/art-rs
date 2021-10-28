@@ -1,7 +1,7 @@
 use crate::node::internal::SearchResult::{Found, GoDown, GoUp};
 use crate::node::leaf::LeafNodeRef;
-use crate::node::search::{SearchArgument, SearchResult};
 use crate::node::{NodeBase, NodeRef};
+use crate::search::{SearchArgument, SearchResult};
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::ptr::NonNull;

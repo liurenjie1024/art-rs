@@ -1,7 +1,10 @@
+use std::collections::btree_map::BTreeMap;
+
+mod entry;
 mod node;
+mod search;
 pub mod tree;
 
-use std::collections::btree_map::BTreeMap;
 //
 // #[cfg(test)]
 // mod tests {

@@ -1,13 +1,19 @@
 use crate::node::internal::SearchResult::{Found, GoDown, GoUp};
 use crate::node::leaf::LeafNodeRef;
-use crate::node::{NodeBase, NodeRef};
+use crate::node::node16::Node16Children;
+use crate::node::node256::Node256Children;
+use crate::node::node4::Node4Children;
+use crate::node::node48::Node48Children;
+use crate::node::NodeKind::Leaf;
+use crate::node::{NodeBase, NodeRef, NodeType};
 use crate::search::{SearchArgument, SearchResult};
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 const MAX_PREFIX_LEN: usize = 16;
 
+#[derive(Default)]
 struct PartialPrefixData {
   partial_prefix: [u8; MAX_PREFIX_LEN],
   partial_prefix_len: usize,
@@ -37,12 +43,33 @@ pub(crate) struct InternalNodeRef<V> {
   inner: NonNull<InternalNodeBase<V>>,
 }
 
-trait ChildrenContainer {}
+trait ChildrenContainer: Default {
+  const NODE_TYPE: NodeType;
+}
 
 impl PartialPrefixData {
   #[inline(always)]
   fn partial_prefix(&self) -> &[u8] {
     &self.partial_prefix[0..self.partial_prefix_len]
+  }
+
+  fn same_prefix_len(&self, other: &[u8]) -> usize {
+    if let Some(pos) = self
+      .partial_prefix()
+      .iter()
+      .zip(other)
+      .position(|(left, right)| *left != *right)
+    {
+      pos + 1
+    } else {
+      min(self.partial_prefix_len, other.len())
+    }
+  }
+
+  fn set_data(&mut self, new_data: &[u8]) {
+    assert!(new_data.len() <= MAX_PREFIX_LEN);
+    (&mut self.partial_prefix[0..new_data.len()]).copy_from_slice(new_data);
+    self.partial_prefix_len = new_data.len();
   }
 }
 
@@ -66,6 +93,11 @@ impl<V> InternalNodeRef<V> {
     unsafe { self.inner.as_ref() }
   }
 
+  #[inline(always)]
+  fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
+    unsafe { self.inner.as_mut() }
+  }
+
   pub(crate) fn find_lower_bound(self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
     match &self.inner().partial_key {
       PartialKey::PartialPrefix(data) => self.lower_bound_with_partial_prefix(data, arg),
@@ -74,11 +106,70 @@ impl<V> InternalNodeRef<V> {
   }
 
   pub(crate) fn find_child(self, _k: u8) -> Option<NodeRef<V>> {
-    unimplemented!()
+    todo!()
   }
 
   pub(crate) fn find_next_child(self, _k: u8) -> Option<NodeRef<V>> {
-    unimplemented!()
+    todo!()
+  }
+
+  /// Should only be called by entry
+  pub(crate) fn upsert(self, input_key: &[u8], depth: usize, value: V) -> NodeRef<V> {
+    let input_partial_key = &input_key[depth..];
+    let same_prefix_len = this_partial_key.same_prefix_len(input_partial_key);
+
+    if same_prefix_len < min(this_partial_key.partial_prefix_len, input_partial_key.len()) {
+      // We need to split node
+      let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
+      new_node4.set_prefix(&this_partial_key.partial_prefix[0..same_prefix_len]);
+
+      // Insert self to new node
+      {
+        this_partial_key.set_data(&this_partial_key.partial_prefix[(same_prefix_len + 1)..]);
+        new_node4.upsert_child(partial_key[same_prefix_len], self);
+      }
+
+      // Insert input key/value
+      {
+        let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
+        new_node4.upsert_child(partial_key[same_prefix_len], new_leaf_node);
+      }
+      new_node4.into()
+    } else if input_partial_key.len() > this_partial_key.partial_prefix_len {
+      unreachable!("This should not happen!");
+    } else if input_partial_key.len() == this_partial_key.partial_prefix_len {
+      let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
+      self.inner_mut().partial_key = PartialKey::Leaf(new_leaf_node);
+      self.into()
+    } else {
+      // We need to split node
+      let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
+
+      // Insert self to new node
+      {
+        this_partial_key.set_data(&this_partial_key.partial_prefix[(same_prefix_len + 1)..]);
+        new_node4.upsert_child(partial_key[same_prefix_len], self);
+      }
+
+      {
+        let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
+        new_node4.inner_mut().partial_key = PartialKey::Leaf(new_leaf_node);
+      }
+      new_node4.into()
+    }
+  }
+
+  fn upsert_child(mut self, k: u8, child: NodeRef<V>) -> Option<NodeRef<V>> {
+    todo!()
+  }
+
+  fn upsert_with_partial_prefix(
+    mut self,
+    this_partial_key: &mut PartialPrefixData,
+    input_key: &[u8],
+    depth: usize,
+    value: V,
+  ) -> NodeRef<V> {
   }
 
   fn lower_bound_with_partial_prefix(
@@ -127,6 +218,56 @@ impl<V> InternalNodeRef<V> {
   }
 
   fn minimum_leaf(self) -> LeafNodeRef<V> {
-    unimplemented!()
+    todo!()
+  }
+
+  fn set_prefix(mut self, new_prefix: &[u8]) {
+    match self.inner_mut().partial_key {
+      PartialKey::PartialPrefix(ref mut prefix) => prefix.set_data(new_prefix),
+      _ => unreachable!("Can't set prefix for leave prefix"),
+    }
+  }
+}
+
+pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
+pub(crate) type InternalNode16<V> = InternalNode<Node16Children<V>, V>;
+pub(crate) type InternalNode48<V> = InternalNode<Node48Children<V>, V>;
+pub(crate) type InternalNode256<V> = InternalNode<Node256Children<V>, V>;
+
+impl<V> InternalNodeBase<V> {
+  pub(crate) fn new(node_type: NodeType) -> Self {
+    assert!(node_type.is_internal());
+    Self {
+      node_base: NodeBase::new(node_type),
+      partial_key: PartialKey::PartialPrefix(PartialPrefixData::default()),
+      children_count: 0,
+    }
+  }
+}
+
+impl<C: ChildrenContainer, V> Default for InternalNode<C, V> {
+  fn default() -> Self {
+    Self {
+      base: InternalNodeBase::new(C::NODE_TYPE),
+      children: C::default(),
+      marker: PhantomData,
+    }
+  }
+}
+
+impl<V> InternalNodeRef<V> {
+  pub(crate) fn new<C: ChildrenContainer>() -> Self {
+    let new_node = Box::new(InternalNode::<C, V>::default());
+    let inner = NonNull::from(Box::leak(new_node)).cast();
+
+    Self { inner }
+  }
+}
+
+impl<V> Into<NodeRef<V>> for InternalNodeRef<V> {
+  fn into(self) -> NodeRef<V> {
+    NodeRef::<V> {
+      inner: self.inner.cast(),
+    }
   }
 }

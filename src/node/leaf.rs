@@ -1,3 +1,4 @@
+use crate::node::NodeRef;
 use crate::search::SearchArgument;
 use std::ptr::NonNull;
 
@@ -36,6 +37,19 @@ impl<V> LeafNodeRef<V> {
     Self { inner }
   }
 
+  pub(crate) fn with_data(key: &[u8], value: V) -> Self {
+    let node = Box::new(LeafNode::<V> {
+      key: Vec::from(key),
+      value,
+      prev: None,
+      next: None,
+    });
+
+    Self {
+      inner: NonNull::from(Box::leak(node)),
+    }
+  }
+
   pub(crate) fn is_lower_bound(self, arg: SearchArgument) -> bool {
     let partial_key = arg.partial_key();
     let partial_leaf_key = &self.inner().key()[arg.depth()..];
@@ -49,5 +63,13 @@ impl<V> LeafNodeRef<V> {
 
   pub(crate) fn inner(&self) -> &LeafNode<V> {
     unsafe { self.inner.as_ref() }
+  }
+}
+
+impl<V> Into<NodeRef<V>> for LeafNodeRef<V> {
+  fn into(self) -> NodeRef<V> {
+    NodeRef::<V> {
+      inner: self.inner.cast(),
+    }
   }
 }

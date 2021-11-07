@@ -73,3 +73,12 @@ impl NodeType {
     !self.is_internal()
   }
 }
+
+impl<V> NodeBase<V> {
+  pub(crate) fn new(node_type: NodeType) -> Self {
+    Self {
+      node_type,
+      _marker: PhantomData,
+    }
+  }
+}

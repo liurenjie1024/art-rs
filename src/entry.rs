@@ -1,5 +1,5 @@
 use crate::entry::Entry::{Occupied, Vacant};
-use crate::node::NodeRef;
+use crate::node::{LeafNodeRef, NodeRef};
 
 pub enum Entry<'a, K, V> {
   Vacant(VacantEntry<'a, K, V>),
@@ -14,7 +14,7 @@ pub struct VacantEntry<'a, K, V> {
 
 pub struct OccupiedEntry<'a, K, V> {
   key: K,
-  current: NodeRef<V>,
+  current: LeafNodeRef<V>,
 }
 
 impl<'a, K: AsRef<[u8]>, V> Entry<'a, K, V> {

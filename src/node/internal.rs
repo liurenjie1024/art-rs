@@ -10,6 +10,7 @@ use crate::search::{SearchArgument, SearchResult};
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
+use crate::common_prefix_len;
 
 const MAX_PREFIX_LEN: usize = 16;
 
@@ -20,8 +21,11 @@ struct PartialPrefixData {
 }
 
 enum PartialKey<V> {
-  PartialPrefix(PartialPrefixData),
-  Leaf(LeafNodeRef<V>),
+  Prefix(PartialPrefixData),
+  Leaf {
+    left_node: LeafNodeRef<V>,
+    offset: usize,
+  },
 }
 
 #[repr(C)]
@@ -51,19 +55,6 @@ impl PartialPrefixData {
   #[inline(always)]
   fn partial_prefix(&self) -> &[u8] {
     &self.partial_prefix[0..self.partial_prefix_len]
-  }
-
-  fn same_prefix_len(&self, other: &[u8]) -> usize {
-    if let Some(pos) = self
-      .partial_prefix()
-      .iter()
-      .zip(other)
-      .position(|(left, right)| *left != *right)
-    {
-      pos + 1
-    } else {
-      min(self.partial_prefix_len, other.len())
-    }
   }
 
   fn set_data(&mut self, new_data: &[u8]) {
@@ -100,7 +91,7 @@ impl<V> InternalNodeRef<V> {
 
   pub(crate) fn find_lower_bound(self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
     match &self.inner().partial_key {
-      PartialKey::PartialPrefix(data) => self.lower_bound_with_partial_prefix(data, arg),
+      PartialKey::Prefix(data) => self.lower_bound_with_partial_prefix(data, arg),
       PartialKey::Leaf(leaf) => self.lower_bound_with_leaf(*leaf, arg),
     }
   }
@@ -116,9 +107,10 @@ impl<V> InternalNodeRef<V> {
   /// Should only be called by entry
   pub(crate) fn upsert(self, input_key: &[u8], depth: usize, value: V) -> NodeRef<V> {
     let input_partial_key = &input_key[depth..];
-    let same_prefix_len = this_partial_key.same_prefix_len(input_partial_key);
+    let this_partial_key = self.inner().partial_key.partial_key();
+    let same_prefix_len = common_prefix_len(this_partial_key, input_partial_key);
 
-    if same_prefix_len < min(this_partial_key.partial_prefix_len, input_partial_key.len()) {
+    if same_prefix_len < min(this_partial_key.len(), input_partial_key.len()) {
       // We need to split node
       let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
       new_node4.set_prefix(&this_partial_key.partial_prefix[0..same_prefix_len]);
@@ -223,7 +215,7 @@ impl<V> InternalNodeRef<V> {
 
   fn set_prefix(mut self, new_prefix: &[u8]) {
     match self.inner_mut().partial_key {
-      PartialKey::PartialPrefix(ref mut prefix) => prefix.set_data(new_prefix),
+      PartialKey::Prefix(ref mut prefix) => prefix.set_data(new_prefix),
       _ => unreachable!("Can't set prefix for leave prefix"),
     }
   }
@@ -239,7 +231,7 @@ impl<V> InternalNodeBase<V> {
     assert!(node_type.is_internal());
     Self {
       node_base: NodeBase::new(node_type),
-      partial_key: PartialKey::PartialPrefix(PartialPrefixData::default()),
+      partial_key: PartialKey::Prefix(PartialPrefixData::default()),
       children_count: 0,
     }
   }
@@ -268,6 +260,22 @@ impl<V> Into<NodeRef<V>> for InternalNodeRef<V> {
   fn into(self) -> NodeRef<V> {
     NodeRef::<V> {
       inner: self.inner.cast(),
+    }
+  }
+}
+
+impl<V> PartialKey<V> {
+  fn common_prefix_len(&self, key: &[u8]) -> usize {
+    common_prefix_len(self.partial_key(), key)
+  }
+
+  fn partial_key(&self) -> &[u8] {
+    match self {
+      PartialKey::Prefix(prefix) => prefix.partial_prefix()
+      PartialKey::Leaf {
+        left_node,
+        offset
+      } => left_node.inner().key()[offset..]
     }
   }
 }

@@ -4,6 +4,8 @@ mod entry;
 mod node;
 mod search;
 pub mod tree;
+mod util;
+pub(crate) use util::*;
 
 //
 // #[cfg(test)]

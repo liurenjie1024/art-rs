@@ -5,7 +5,7 @@ use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::NodeKind::Leaf;
-use crate::node::{NodeBase, NodeRef, NodeType};
+use crate::node::{LeafNode, NodeBase, NodeRef, NodeType};
 use crate::search::{SearchArgument, SearchResult};
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
@@ -23,7 +23,7 @@ struct PartialPrefixData {
 enum PartialKey<V> {
   Prefix(PartialPrefixData),
   Leaf {
-    left_node: LeafNodeRef<V>,
+    leaf_node: LeafNodeRef<V>,
     offset: usize,
   },
 }
@@ -105,63 +105,90 @@ impl<V> InternalNodeRef<V> {
   }
 
   /// Should only be called by entry
-  pub(crate) fn upsert(self, input_key: &[u8], depth: usize, value: V) -> NodeRef<V> {
+  pub(crate) fn upsert(mut self, input_key: &[u8], depth: usize, value: V) -> NodeRef<V> {
     let input_partial_key = &input_key[depth..];
-    let this_partial_key = self.inner().partial_key.partial_key();
-    let same_prefix_len = common_prefix_len(this_partial_key, input_partial_key);
+    let mut this_partial_key = &mut self.inner_mut().partial_key;
+    let this_partial_prefix = this_partial_key.partial_key();
+    let same_prefix_len = common_prefix_len(this_partial_prefix, input_partial_key);
 
-    if same_prefix_len < min(this_partial_key.len(), input_partial_key.len()) {
-      // We need to split node
+    if same_prefix_len < min(this_partial_prefix.len(), input_partial_key.len()) {
+      // Create a new node as parent of these no
       let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
-      new_node4.set_prefix(&this_partial_key.partial_prefix[0..same_prefix_len]);
+      new_node4.set_prefix(&this_partial_prefix[0..same_prefix_len]);
 
       // Insert self to new node
       {
-        this_partial_key.set_data(&this_partial_key.partial_prefix[(same_prefix_len + 1)..]);
-        new_node4.upsert_child(partial_key[same_prefix_len], self);
+        match this_partial_key {
+          PartialKey::Prefix(data) => {
+            data.set_data(&this_partial_prefix[(same_prefix_len + 1)..]);
+          }
+          PartialKey::Leaf {
+            leaf_node: _left_node,
+            offset
+          } => {
+            *offset += (same_prefix_len + 1);
+          }
+        }
+        new_node4.upsert_child(this_partial_prefix[same_prefix_len], self);
       }
 
       // Insert input key/value
       {
         let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
-        new_node4.upsert_child(partial_key[same_prefix_len], new_leaf_node);
+        new_node4.upsert_child(this_partial_key[same_prefix_len], new_leaf_node);
       }
+
       new_node4.into()
-    } else if input_partial_key.len() > this_partial_key.partial_prefix_len {
-      unreachable!("This should not happen!");
-    } else if input_partial_key.len() == this_partial_key.partial_prefix_len {
-      let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
-      self.inner_mut().partial_key = PartialKey::Leaf(new_leaf_node);
-      self.into()
     } else {
-      // We need to split node
-      let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
+      if input_partial_key.len() > this_partial_prefix.len() {
+        unreachable!("This should not happen!");
+      } else if input_partial_key.len() == this_partial_prefix.len() {
+        match this_partial_key {
+          PartialKey::Prefix(_) => {
+            *this_partial_key = PartialKey::Leaf {
+              leaf_node: LeafNodeRef::<V>::with_data(input_key, value),
+              offset: depth,
+            };
+          }
+          PartialKey::Leaf {
+            leaf_node: left_node,
+            offset: _offset
+          } => {
+            left_node.inner_mut().set_value(value)
+          }
+        }
+        self.into()
+      } else {
+        // We need to split node
+        let mut new_node4 = InternalNodeRef::<V>::new::<Node4Children<V>>();
 
-      // Insert self to new node
-      {
-        this_partial_key.set_data(&this_partial_key.partial_prefix[(same_prefix_len + 1)..]);
-        new_node4.upsert_child(partial_key[same_prefix_len], self);
-      }
+        // Insert self to new node
+        {
+          match this_partial_key {
+            PartialKey::Prefix(data) => {
+              data.set_data(&this_partial_prefix[(same_prefix_len + 1)..]);
+            }
+            PartialKey::Leaf {
+              leaf_node: _left_node,
+              offset
+            } => {
+              *offset += (same_prefix_len + 1);
+            }
+          }
+          new_node4.upsert_child(this_partial_prefix[same_prefix_len], self);
+        }
 
-      {
-        let new_leaf_node = LeafNodeRef::<V>::with_data(input_key, value);
-        new_node4.inner_mut().partial_key = PartialKey::Leaf(new_leaf_node);
+        {
+          new_node4.into().set_leaf(input_key, depth, value);
+        }
+
+        new_node4.into()
       }
-      new_node4.into()
     }
   }
 
-  fn upsert_child(mut self, k: u8, child: NodeRef<V>) -> Option<NodeRef<V>> {
+  pub(crate) fn upsert_child(mut self, k: u8, child: NodeRef<V>) -> Option<NodeRef<V>> {
     todo!()
-  }
-
-  fn upsert_with_partial_prefix(
-    mut self,
-    this_partial_key: &mut PartialPrefixData,
-    input_key: &[u8],
-    depth: usize,
-    value: V,
-  ) -> NodeRef<V> {
   }
 
   fn lower_bound_with_partial_prefix(
@@ -213,11 +240,19 @@ impl<V> InternalNodeRef<V> {
     todo!()
   }
 
-  fn set_prefix(mut self, new_prefix: &[u8]) {
-    match self.inner_mut().partial_key {
-      PartialKey::Prefix(ref mut prefix) => prefix.set_data(new_prefix),
-      _ => unreachable!("Can't set prefix for leave prefix"),
-    }
+  pub(crate) fn set_prefix(mut self, new_prefix: &[u8]) {
+    let mut prefix_data = PartialPrefixData::default();
+    prefix_data.set_data(new_prefix);
+
+    self.inner_mut().partial_key = PartialKey::Prefix(prefix_data);
+  }
+
+  pub(crate) fn set_leaf_data(mut self, full_key: &[u8], depth: usize, value: V) {
+    let leaf_node = LeafNodeRef::with_data(full_key, value);
+    self.inner_mut().partial_key = PartialKey::Leaf {
+      leaf_node: leaf_node,
+      offset: depth,
+    };
   }
 }
 
@@ -234,6 +269,13 @@ impl<V> InternalNodeBase<V> {
       partial_key: PartialKey::Prefix(PartialPrefixData::default()),
       children_count: 0,
     }
+  }
+
+  pub(crate) fn set_leaf(&mut self, leaf_node: LeafNodeRef<V>) {
+    self.partial_key = PartialKey::Leaf {
+      offset: 0,
+      leaf_node
+    };
   }
 }
 
@@ -254,6 +296,7 @@ impl<V> InternalNodeRef<V> {
 
     Self { inner }
   }
+
 }
 
 impl<V> Into<NodeRef<V>> for InternalNodeRef<V> {
@@ -271,9 +314,9 @@ impl<V> PartialKey<V> {
 
   fn partial_key(&self) -> &[u8] {
     match self {
-      PartialKey::Prefix(prefix) => prefix.partial_prefix()
+      PartialKey::Prefix(prefix) => prefix.partial_prefix(),
       PartialKey::Leaf {
-        left_node,
+        leaf_node: left_node,
         offset
       } => left_node.inner().key()[offset..]
     }

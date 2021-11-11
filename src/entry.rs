@@ -1,5 +1,5 @@
 use crate::entry::Entry::{Occupied, Vacant};
-use crate::node::{LeafNodeRef, NodeRef};
+use crate::node::{Edge, LeafNodeRef, NodeRef};
 
 pub enum Entry<'a, K, V> {
   Vacant(VacantEntry<'a, K, V>),
@@ -8,7 +8,7 @@ pub enum Entry<'a, K, V> {
 
 pub struct VacantEntry<'a, K, V> {
   key: K,
-  parent: Option<NodeRef<V>>,
+  parent: Option<Edge<V>>,
   current: Option<NodeRef<V>>,
 }
 

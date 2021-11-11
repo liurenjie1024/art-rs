@@ -3,12 +3,14 @@ use std::ptr::NonNull;
 
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
+pub(crate) use edge::*;
 
 mod internal;
 mod node16;
 mod node256;
 mod node4;
 mod node48;
+mod edge;
 
 mod leaf;
 
@@ -81,4 +83,8 @@ impl<V> NodeBase<V> {
       _marker: PhantomData,
     }
   }
+}
+
+impl<V> NodeKind<V> {
+  
 }

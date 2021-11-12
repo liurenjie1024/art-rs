@@ -5,53 +5,48 @@ use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::NodeKind::Leaf;
-use crate::node::{LeafNode, NodeBase, NodeRef, NodeType};
-use crate::search::{SearchArgument, SearchResult};
+use crate::node::{BoxedLeafNode, LeafNode, NodeBase, NodeRef, NodeType};
+use crate::navigate::{SearchArgument, SearchResult};
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use crate::common_prefix_len;
+use crate::marker::Immut;
 
 const MAX_PREFIX_LEN: usize = 16;
 
+/// The memory layout of different internal nodes are same, so we use node4 for type erease.
+type InternalNodeBase<V> = InternalNode4<V>;
+
+/// This pointer doesn't have to actually point to a `Node4`, but also possible to point to
+/// internal nodes with other children type. We can infer actual node type from `node_type` in
+/// `node_base`.
+pub(crate) type BoxedInternalNode<V> = NonNull<InternalNodeBase<V>>;
+
 #[derive(Default)]
-struct PartialPrefixData {
+pub(crate) struct PrefixData {
   partial_prefix: [u8; MAX_PREFIX_LEN],
   partial_prefix_len: usize,
 }
 
-enum PartialKey<V> {
-  Prefix(PartialPrefixData),
-  Leaf {
-    leaf_node: LeafNodeRef<V>,
-    offset: usize,
-  },
-}
-
-#[repr(C)]
-pub(crate) struct InternalNodeBase<V> {
-  node_base: NodeBase<V>,
-  partial_key: PartialKey<V>,
-  children_count: u8,
+pub(crate) enum PartialKey<V> {
+  Prefix(PrefixData),
+  Leaf(BoxedLeafNode<V>),
 }
 
 #[repr(C)]
 pub(crate) struct InternalNode<C, V> {
-  base: InternalNodeBase<C>,
+  node_base: NodeBase<V>,
+  partial_key: PartialKey<V>,
+  children_count: u8,
   children: C,
-  marker: PhantomData<V>,
 }
 
-#[repr(C)]
-pub(crate) struct InternalNodeRef<V> {
-  inner: NonNull<InternalNodeBase<V>>,
-}
-
-trait ChildrenContainer: Default {
+trait Children: Default {
   const NODE_TYPE: NodeType;
 }
 
-impl PartialPrefixData {
+impl PrefixData {
   #[inline(always)]
   fn partial_prefix(&self) -> &[u8] {
     &self.partial_prefix[0..self.partial_prefix_len]
@@ -64,30 +59,43 @@ impl PartialPrefixData {
   }
 }
 
-impl<V> InternalNodeRef<V> {
-  pub(crate) fn new(inner: NonNull<InternalNodeBase<V>>) -> Self {
+pub(crate) struct InternalNodeRef<BorrowType, V> {
+  inner: BoxedInternalNode<V>,
+}
+
+impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
+  pub(crate) fn new(inner: BoxedInternalNode<V>) -> Self {
     Self { inner }
   }
 }
 
-impl<V> Clone for InternalNodeRef<V> {
+impl<'a, V> Clone for InternalNodeRef<Immut<'a>, V> {
   fn clone(&self) -> Self {
     Self { inner: self.inner }
   }
 }
 
-impl<V> Copy for InternalNodeRef<V> {}
+impl<'a, V> Copy for InternalNodeRef<Immut<'a>, V> {}
 
-impl<V> InternalNodeRef<V> {
+impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
+  pub(crate) unsafe fn from_node_ref_unchecked(node_ref: NodeRef<BorrowType, V>) -> Self {
+    Self {
+      inner: node_ref.inner.cast()
+    }
+  }
+
   #[inline(always)]
   fn inner(&self) -> &InternalNodeBase<V> {
     unsafe { self.inner.as_ref() }
   }
 
-  #[inline(always)]
-  fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
-    unsafe { self.inner.as_mut() }
-  }
+
+  // #[inline(always)]
+  // fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
+  //   unsafe { self.inner.as_mut() }
+  // }
+
+  pub(crate) fn partial_prefix(&self) -> &[u8] {}
 
   pub(crate) fn find_lower_bound(self, arg: SearchArgument) -> SearchResult<LeafNodeRef<V>> {
     match &self.inner().partial_key {
@@ -96,13 +104,6 @@ impl<V> InternalNodeRef<V> {
     }
   }
 
-  pub(crate) fn find_child(self, _k: u8) -> Option<NodeRef<V>> {
-    todo!()
-  }
-
-  pub(crate) fn find_next_child(self, _k: u8) -> Option<NodeRef<V>> {
-    todo!()
-  }
 
   /// Should only be called by entry
   pub(crate) fn upsert(mut self, input_key: &[u8], depth: usize, value: V) -> NodeRef<V> {
@@ -193,7 +194,7 @@ impl<V> InternalNodeRef<V> {
 
   fn lower_bound_with_partial_prefix(
     self,
-    partial_prefix_data: &PartialPrefixData,
+    partial_prefix_data: &PrefixData,
     arg: SearchArgument,
   ) -> SearchResult<LeafNodeRef<V>> {
     let partial_key = arg.partial_key();
@@ -236,12 +237,9 @@ impl<V> InternalNodeRef<V> {
     }
   }
 
-  fn minimum_leaf(self) -> LeafNodeRef<V> {
-    todo!()
-  }
 
   pub(crate) fn set_prefix(mut self, new_prefix: &[u8]) {
-    let mut prefix_data = PartialPrefixData::default();
+    let mut prefix_data = PrefixData::default();
     prefix_data.set_data(new_prefix);
 
     self.inner_mut().partial_key = PartialKey::Prefix(prefix_data);
@@ -254,6 +252,10 @@ impl<V> InternalNodeRef<V> {
       offset: depth,
     };
   }
+
+  pub(crate) fn partial_key(&self) -> &PartialKey<V> {
+    self.inner().partial_key()
+  }
 }
 
 pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
@@ -261,12 +263,12 @@ pub(crate) type InternalNode16<V> = InternalNode<Node16Children<V>, V>;
 pub(crate) type InternalNode48<V> = InternalNode<Node48Children<V>, V>;
 pub(crate) type InternalNode256<V> = InternalNode<Node256Children<V>, V>;
 
-impl<V> InternalNodeBase<V> {
+impl<C, V> InternalNode<C, V> {
   pub(crate) fn new(node_type: NodeType) -> Self {
     assert!(node_type.is_internal());
     Self {
       node_base: NodeBase::new(node_type),
-      partial_key: PartialKey::Prefix(PartialPrefixData::default()),
+      partial_key: PartialKey::Prefix(PrefixData::default()),
       children_count: 0,
     }
   }
@@ -274,12 +276,25 @@ impl<V> InternalNodeBase<V> {
   pub(crate) fn set_leaf(&mut self, leaf_node: LeafNodeRef<V>) {
     self.partial_key = PartialKey::Leaf {
       offset: 0,
-      leaf_node
+      leaf_node,
     };
+  }
+
+  pub(crate) fn partial_prefix(&self) -> &[u8] {
+    match &self.partial_key {
+      PartialKey::Prefix(prefix) => prefix.partial_prefix(),
+      PartialKey::Leaf(leaf_ptr) => unsafe {
+        leaf_ptr.as_ref().partial_key()
+      }
+    }
+  }
+
+  pub(crate) fn partial_key(&self) -> &PartialKey<V> {
+    &self.partial_key
   }
 }
 
-impl<C: ChildrenContainer, V> Default for InternalNode<C, V> {
+impl<C: Children, V> Default for InternalNode<C, V> {
   fn default() -> Self {
     Self {
       base: InternalNodeBase::new(C::NODE_TYPE),
@@ -290,13 +305,12 @@ impl<C: ChildrenContainer, V> Default for InternalNode<C, V> {
 }
 
 impl<V> InternalNodeRef<V> {
-  pub(crate) fn new<C: ChildrenContainer>() -> Self {
+  pub(crate) fn new<C: Children>() -> Self {
     let new_node = Box::new(InternalNode::<C, V>::default());
     let inner = NonNull::from(Box::leak(new_node)).cast();
 
     Self { inner }
   }
-
 }
 
 impl<V> Into<NodeRef<V>> for InternalNodeRef<V> {

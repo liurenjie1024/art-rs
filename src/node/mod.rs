@@ -1,20 +1,24 @@
+use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
-pub(crate) use edge::*;
+pub(crate) use handle::*;
+use crate::marker::Immut;
 
 mod internal;
 mod node16;
 mod node256;
 mod node4;
 mod node48;
-mod edge;
+mod handle;
 
 mod leaf;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
+
+pub(crate) type BoxedNode<V> = NonNull<NodeBase<V>>;
 
 #[repr(u8)]
 enum NodeType {
@@ -31,47 +35,47 @@ pub(crate) struct NodeBase<V> {
   _marker: PhantomData<V>,
 }
 
-pub(crate) struct NodeRef<V> {
+pub(crate) struct NodeRef<BorrowType, V> {
   inner: NonNull<NodeBase<V>>,
 }
 
-impl<V> Clone for NodeRef<V> {
+impl<'a, V> Clone for NodeRef<Immut<'a>, V> {
   fn clone(&self) -> Self {
     Self { inner: self.inner }
   }
 }
 
-impl<V> Copy for NodeRef<V> {}
+impl<'a, V> Copy for NodeRef<Immut<'a>, V> {}
 
-pub(crate) enum NodeKind<V> {
-  Internal(InternalNodeRef<V>),
-  Leaf(LeafNodeRef<V>),
+pub(crate) enum NodeKind<BorrowType, V> {
+  Internal(InternalNodeRef<BorrowType, V>),
+  Leaf(LeafNodeRef<BorrowType, V>),
 }
 
-impl<V> NodeRef<V> {
-  pub(crate) fn downcast(self) -> NodeKind<V> {
-    let node_base = unsafe { self.inner.as_ref() };
-
-    match node_base.node_type {
-      NodeType::Leaf => NodeKind::Leaf(LeafNodeRef::<V>::new(self.inner.cast())),
-      _ => NodeKind::Internal(InternalNodeRef::<V>::new(self.inner.cast())),
+impl<BorrowType, V> NodeRef<BorrowType, V> {
+  pub(crate) fn downcast(self) -> NodeKind<BorrowType, V> {
+    unsafe {
+      match self.inner().node_type {
+        NodeType::Leaf => NodeKind::Leaf(LeafNodeRef::<BorrowType, V>::from_node_ref_unchecked(self)),
+        _ => NodeKind::Internal(InternalNodeRef::<BorrowType, V>::from_node_ref_unchecked(self)),
+      }
     }
   }
 
-  pub(crate) fn minimum_leaf(self) -> LeafNodeRef<V> {
+  pub(crate) fn minimum_leaf(self) -> LeafNodeRef<BorrowType, V> {
     unimplemented!()
   }
 }
 
 impl NodeType {
-  fn is_internal(self) -> bool {
+  fn is_internal(&self) -> bool {
     match self {
       NodeType::Leaf => false,
       _ => true,
     }
   }
 
-  fn is_leaf(self) -> bool {
+  fn is_leaf(&self) -> bool {
     !self.is_internal()
   }
 }
@@ -85,6 +89,16 @@ impl<V> NodeBase<V> {
   }
 }
 
-impl<V> NodeKind<V> {
-  
+impl<V> From<NodeType> for NodeBase<V> {
+  fn from(node_type: NodeType) -> Self {
+    Self::new(node_type)
+  }
+}
+
+impl<BorrowType, V> NodeRef<BorrowType, V> {
+  fn inner(&self) -> &NodeBase<V> {
+    unsafe {
+      self.inner.as_ref()
+    }
+  }
 }

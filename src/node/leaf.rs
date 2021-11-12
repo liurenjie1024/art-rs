@@ -1,35 +1,23 @@
 use std::cmp::min;
 use std::mem::swap;
-use crate::node::{InternalNodeRef, NodeRef};
-use crate::search::SearchArgument;
+use crate::node::{InternalNodeRef, NodeBase, NodeRef};
+use crate::navigate::SearchArgument;
 use std::ptr::NonNull;
 use crate::common_prefix_len;
 use crate::node::node4::Node4Children;
 
-pub struct LeafRange<V> {
-  start: Option<LeafNodeRef<V>>,
-  end: Option<LeafNodeRef<V>>,
-}
 
-pub(crate) struct LeafNodeRef<V> {
-  inner: NonNull<LeafNode<V>>,
-}
+pub(crate) type BoxedLeafNode<V> = NonNull<LeafNode<V>>;
 
-impl<V> Clone for LeafNodeRef<V> {
-  fn clone(&self) -> Self {
-    Self { inner: self.inner }
-  }
-}
-
-impl<V> Copy for LeafNodeRef<V> {}
-
-pub struct LeafNode<V> {
+#[repr(C)]
+pub(crate) struct LeafNode<V> {
+  node_base: NodeBase<V>,
   key: Vec<u8>,
   value: V,
   /// Prefix length in parent.
   prefix_len: usize,
-  prev: Option<NonNull<LeafNode<V>>>,
-  next: Option<NonNull<LeafNode<V>>>,
+  prev: Option<BoxedLeafNode<V>>,
+  next: Option<BoxedLeafNode<V>>,
 }
 
 impl<V> LeafNode<V> {
@@ -38,8 +26,18 @@ impl<V> LeafNode<V> {
   }
 }
 
-impl<V> LeafNodeRef<V> {
-  pub(crate) fn new(inner: NonNull<LeafNode<V>>) -> Self {
+pub(crate) struct LeafNodeRef<BorrowType, V> {
+  inner: NonNull<LeafNode<V>>,
+}
+
+impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
+  pub(crate) unsafe fn from_node_ref_unchecked(node_ref: NodeRef<BorrowType, V>) -> Self {
+    Self {
+      inner: node_ref.inner.cast()
+    }
+  }
+
+  pub(crate) fn new(inner: BoxedLeafNode<V>) -> Self {
     Self { inner }
   }
 
@@ -156,5 +154,13 @@ impl<V> LeafNode<V> {
 
   pub(crate) fn partial_key(&self) -> &[u8] {
     &self.key[self.prefix_len..]
+  }
+}
+
+impl<BorrowType, V> From<BoxedLeafNode<V>> for LeafNodeRef<BorrowType, V> {
+  fn from(inner: BoxedLeafNode<V>) -> Self {
+    Self {
+      inner
+    }
   }
 }

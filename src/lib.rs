@@ -3,9 +3,10 @@ use std::collections::btree_map::BTreeMap;
 mod entry;
 mod node;
 mod navigate;
-pub mod tree;
+pub mod map;
 mod util;
-pub mod marker;
+mod marker;
+mod search;
 
 
 pub(crate) use util::*;

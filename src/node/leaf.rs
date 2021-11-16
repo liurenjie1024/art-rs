@@ -136,6 +136,14 @@ impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
   pub(crate) fn inner_mut(&mut self) -> &mut LeafNode<V> {
     unsafe { self.inner.as_mut() }
   }
+
+  pub(crate) fn partial_key(&self) -> &[u8] {
+    let inner = self.inner();
+    if inner.prefix_len >= inner.key.len() {
+      return &[];
+    }
+    &inner.key[inner.prefix_len..]
+  }
 }
 
 impl<V> Into<NodeRef<V>> for LeafNodeRef<V> {

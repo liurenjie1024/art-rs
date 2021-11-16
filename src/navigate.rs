@@ -3,10 +3,10 @@ use crate::node::{BoxedLeafNode, Handle, InternalNodeRef, PartialKey};
 use crate::node::LeafNodeRef;
 use crate::node::{NodeKind, NodeRef, DEFAULT_TREE_DEPTH};
 
-pub(crate) enum SearchResult<R> {
+pub(crate) enum SearchResult<BorrowType, V> {
   GoUp,
-  GoDown(usize),
-  Found(R),
+  Found(LeafNodeRef<BorrowType, V>),
+  GoDown(InternalNodeRef<BorrowType, V>),
 }
 
 #[derive(Copy, Clone)]
@@ -31,12 +31,13 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
           SearchResult::Found(ret) => {
             return Some(ret);
           }
-          SearchResult::GoDown(new_depth) => {
+          SearchResult::GoDown(origin_node) => {
+            let new_depth = depth + origin_node.partial_key().len();
             let k = key[new_depth];
             if let Some(c) = node.find_child(k) {
-              stack.push(c);
+              stack.push(c.reborrow());
               depth = new_depth + 1;
-              cur = c;
+              cur = c.reborrow().into();
             } else {
               break;
             }

@@ -5,7 +5,7 @@ use std::ptr::NonNull;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
 pub(crate) use handle::*;
-use crate::marker::Immut;
+use crate::marker::{Immut, Owned};
 
 mod internal;
 mod node16;
@@ -17,7 +17,7 @@ mod handle;
 mod leaf;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
-
+pub(crate) type Root<V> = NodeRef<Owned, V>;
 pub(crate) type BoxedNode<V> = NonNull<NodeBase<V>>;
 
 #[repr(u8)]
@@ -64,6 +64,13 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
 
   pub(crate) fn minimum_leaf(self) -> LeafNodeRef<BorrowType, V> {
     unimplemented!()
+  }
+
+  /// Temporarily takes out another immutable reference to the same node.
+  pub(crate) fn reborrow(&self) -> NodeRef<Immut<'_>, V> {
+    NodeRef {
+      inner: self.inner
+    }
   }
 }
 

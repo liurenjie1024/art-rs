@@ -5,7 +5,7 @@ use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::NodeKind::Leaf;
-use crate::node::{BoxedLeafNode, LeafNode, NodeBase, NodeRef, NodeType};
+use crate::node::{BoxedLeafNode, BoxedNode, LeafNode, NodeBase, NodeRef, NodeType};
 use crate::navigate::{SearchArgument, SearchResult};
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
@@ -44,6 +44,8 @@ pub(crate) struct InternalNode<C, V> {
 
 trait Children: Default {
   const NODE_TYPE: NodeType;
+
+  unsafe fn child_at(&self, idx: usize) -> BoxedNode<V>;
 }
 
 impl PrefixData {
@@ -101,6 +103,12 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
     match &self.inner().partial_key {
       PartialKey::Prefix(data) => self.lower_bound_with_partial_prefix(data, arg),
       PartialKey::Leaf(leaf) => self.lower_bound_with_leaf(*leaf, arg),
+    }
+  }
+
+  pub(crate) fn reborrow(&self) -> InternalNodeRef<Immut<'_>, V> {
+    InternalNodeRef {
+      inner: self.inner
     }
   }
 
@@ -256,6 +264,14 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   pub(crate) fn partial_key(&self) -> &PartialKey<V> {
     self.inner().partial_key()
   }
+
+  pub(crate) fn child_at(self, idx: usize) -> NodeRef<BorrowType, V> {
+    todo!()
+  }
+
+  pub(crate) fn find_child(self, k: u8) -> Option<NodeRef<BorrowType, V>> {
+    todo!()
+  }
 }
 
 pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
@@ -304,6 +320,11 @@ impl<C: Children, V> Default for InternalNode<C, V> {
   }
 }
 
+impl<C: Children, V> InternalNode<C, V> {
+  fn child_at(&self, idx: usize) -> {
+  }
+}
+
 impl<V> InternalNodeRef<V> {
   pub(crate) fn new<C: Children>() -> Self {
     let new_node = Box::new(InternalNode::<C, V>::default());
@@ -334,5 +355,9 @@ impl<V> PartialKey<V> {
         offset
       } => left_node.inner().key()[offset..]
     }
+  }
+
+  pub(crate) fn len(&self) -> usize {
+    self.partial_key().len()
   }
 }

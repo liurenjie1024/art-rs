@@ -1,18 +1,17 @@
-use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
+use crate::marker::{Immut, Owned};
+pub(crate) use handle::*;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
-pub(crate) use handle::*;
-use crate::marker::{Immut, Owned};
 
+mod handle;
 mod internal;
 mod node16;
 mod node256;
 mod node4;
 mod node48;
-mod handle;
 
 mod leaf;
 
@@ -21,7 +20,7 @@ pub(crate) type Root<V> = NodeRef<Owned, V>;
 pub(crate) type BoxedNode<V> = NonNull<NodeBase<V>>;
 
 #[repr(u8)]
-enum NodeType {
+pub(crate) enum NodeType {
   Node4,
   Node16,
   Node48,
@@ -37,11 +36,15 @@ pub(crate) struct NodeBase<V> {
 
 pub(crate) struct NodeRef<BorrowType, V> {
   inner: NonNull<NodeBase<V>>,
+  _marker: PhantomData<BorrowType>,
 }
 
 impl<'a, V> Clone for NodeRef<Immut<'a>, V> {
   fn clone(&self) -> Self {
-    Self { inner: self.inner }
+    Self {
+      inner: self.inner,
+      _marker: PhantomData,
+    }
   }
 }
 
@@ -56,9 +59,16 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
   pub(crate) fn downcast(self) -> NodeKind<BorrowType, V> {
     unsafe {
       match self.inner().node_type {
-        NodeType::Leaf => NodeKind::Leaf(LeafNodeRef::<BorrowType, V>::from_node_ref_unchecked(self)),
-        _ => NodeKind::Internal(InternalNodeRef::<BorrowType, V>::from_node_ref_unchecked(self)),
+        NodeType::Leaf => NodeKind::Leaf(LeafNodeRef::<BorrowType, V>::from(self)),
+        _ => NodeKind::Internal(InternalNodeRef::<BorrowType, V>::from(self)),
       }
+    }
+  }
+
+  pub(crate) unsafe fn from_leaf_node_ref(leaf_node: BoxedLeafNode<V>) -> Self {
+    Self {
+      inner: leaf_node.cast(),
+      _marker: PhantomData,
     }
   }
 
@@ -69,7 +79,8 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
   /// Temporarily takes out another immutable reference to the same node.
   pub(crate) fn reborrow(&self) -> NodeRef<Immut<'_>, V> {
     NodeRef {
-      inner: self.inner
+      inner: self.inner,
+      _marker: PhantomData,
     }
   }
 }
@@ -104,8 +115,6 @@ impl<V> From<NodeType> for NodeBase<V> {
 
 impl<BorrowType, V> NodeRef<BorrowType, V> {
   fn inner(&self) -> &NodeBase<V> {
-    unsafe {
-      self.inner.as_ref()
-    }
+    unsafe { self.inner.as_ref() }
   }
 }

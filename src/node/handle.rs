@@ -13,13 +13,13 @@ impl<BorrowType, V> Handle<BorrowType, V> {
   pub(crate) fn reborrow(&self) -> Handle<Immut<'_>, V> {
     Handle {
       parent: self.parent.reborrow(),
-      idx: self.idx
+      idx: self.idx,
     }
   }
 }
 
-impl<BorrowType, V> Into<NodeRef<BorrowType, V>> for Handle<BorrowType, V> {
-  fn into(self) -> NodeRef<BorrowType, V> {
-    self.parent.child_at(self.idx)
-  }
-}
+// impl<BorrowType, V> Into<NodeRef<BorrowType, V>> for Handle<BorrowType, V> {
+//   fn into(self) -> NodeRef<BorrowType, V> {
+//     self.parent.child_at(self.idx)
+//   }
+// }

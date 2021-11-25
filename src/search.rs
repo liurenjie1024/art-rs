@@ -44,31 +44,26 @@ impl<BorrowType: marker::BorrowType, V> InternalNodeRef<BorrowType, V> {
 
     if input_partial_prefix.len() > this_partial_prefix.len() {
       match &input_partial_prefix[0..this_partial_prefix.len()].cmp(this_partial_prefix) {
-        Ordering::Equal => match self.inner().partial_key() {
-          PartialKey::Prefix(prefix) => {
-            let new_depth = *depth + self.inner().partial_prefix().len();
+        Ordering::Equal => {
+          let new_depth = *depth + self.inner().partial_prefix().len();
 
-            let k = key[new_depth];
+          let k = key[new_depth];
 
-            match self.find_child(k) {
-              Some(child) => {
-                *depth = new_depth + 1;
-                GoDown(child)
-              }
-              None => NotFound,
+          match self.find_child(k) {
+            Some(child) => {
+              *depth = new_depth + 1;
+              GoDown(child)
             }
+            None => NotFound,
           }
-          PartialKey::Leaf(_) => NotFound,
-        },
+        }
         _ => NotFound,
       }
     } else if input_partial_prefix.len() == this_partial_prefix.len() {
       match input_partial_prefix.cmp(this_partial_prefix) {
-        Ordering::Equal => match self.inner().partial_key() {
-          PartialKey::Prefix(_) => NotFound,
-          PartialKey::Leaf(leaf_node) => unsafe {
-            Found(LeafNodeRef::<BorrowType, V>::new(leaf_node.cast()))
-          },
+        Ordering::Equal => match self.get_leaf() {
+          Some(leaf) => Found(leaf),
+          None => NotFound,
         },
         _ => NotFound,
       }

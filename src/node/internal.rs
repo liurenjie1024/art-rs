@@ -22,20 +22,21 @@ type InternalNodeBase<V> = InternalNode4<V>;
 pub(crate) type BoxedInternalNode<V> = NonNull<InternalNodeBase<V>>;
 
 #[derive(Default)]
-pub(crate) struct PrefixData {
+pub(crate) struct Fixed {
   partial_prefix: [u8; MAX_PREFIX_LEN],
   partial_prefix_len: usize,
 }
 
-pub(crate) enum PartialKey<V> {
-  Prefix(PrefixData),
-  Leaf(BoxedLeafNode<V>),
+pub(crate) enum PartialKey {
+  FixSized(Fixed),
+  VarSized(Vec<u8>),
 }
 
 #[repr(C)]
 pub(crate) struct InternalNode<C, V> {
   node_base: NodeBase<V>,
-  partial_key: PartialKey<V>,
+  partial_key: PartialKey,
+  leaf: Option<BoxedLeafNode<V>>,
   children_count: u8,
   children: C,
 }
@@ -44,7 +45,7 @@ pub(crate) trait Children: Default {
   const NODE_TYPE: NodeType;
 }
 
-impl PrefixData {
+impl Fixed {
   #[inline(always)]
   fn partial_prefix(&self) -> &[u8] {
     &self.partial_prefix[0..self.partial_prefix_len]
@@ -275,6 +276,13 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   pub(crate) fn find_child(self, k: u8) -> Option<NodeRef<BorrowType, V>> {
     todo!()
   }
+
+  pub(crate) fn get_leaf(&self) -> Option<LeafNodeRef<BorrowType, V>> {
+    self
+      .inner()
+      .leaf
+      .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::new(ptr) })
+  }
 }
 
 pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
@@ -287,25 +295,15 @@ impl<C: Children, V> InternalNode<C, V> {
     assert!(node_type.is_internal());
     Self {
       node_base: NodeBase::new(node_type),
-      partial_key: PartialKey::Prefix(PrefixData::default()),
+      partial_key: PartialKey::default(),
+      leaf: None,
       children_count: 0,
       children: C::default(),
     }
   }
 
-  pub(crate) fn set_leaf(&mut self, leaf_node: BoxedLeafNode<V>) {
-    self.partial_key = PartialKey::Leaf(leaf_node);
-  }
-
   pub(crate) fn partial_prefix(&self) -> &[u8] {
-    match &self.partial_key {
-      PartialKey::Prefix(prefix) => prefix.partial_prefix(),
-      PartialKey::Leaf(leaf_ptr) => unsafe { leaf_ptr.as_ref().partial_key() },
-    }
-  }
-
-  pub(crate) fn partial_key(&self) -> &PartialKey<V> {
-    &self.partial_key
+    self.partial_key.as_slice()
   }
 }
 
@@ -315,19 +313,25 @@ impl<C: Children, V> Default for InternalNode<C, V> {
   }
 }
 
-impl<V> PartialKey<V> {
+impl PartialKey {
   fn common_prefix_len(&self, key: &[u8]) -> usize {
-    common_prefix_len(self.partial_key(), key)
+    common_prefix_len(self.as_slice(), key)
   }
 
-  fn partial_key(&self) -> &[u8] {
+  fn as_slice(&self) -> &[u8] {
     match self {
-      PartialKey::Prefix(prefix) => prefix.partial_prefix(),
-      PartialKey::Leaf(leaf) => unsafe { leaf.as_ref().partial_key() },
+      PartialKey::FixSized(prefix) => prefix.partial_prefix(),
+      PartialKey::VarSized(key) => key.as_slice(),
     }
   }
 
   pub(crate) fn len(&self) -> usize {
-    self.partial_key().len()
+    self.as_slice().len()
+  }
+}
+
+impl Default for PartialKey {
+  fn default() -> Self {
+    PartialKey::FixSized(Fixed::default())
   }
 }

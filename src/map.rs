@@ -1,13 +1,12 @@
 use crate::node::{NodeRef, Root};
-use std::borrow::Borrow;
 use std::marker::PhantomData;
 
-pub struct AdaptiveRadixTreeMap<K, V> {
+pub struct ARTMap<K, V> {
   root: Option<Root<V>>,
   _phantom: PhantomData<K>,
 }
 
-impl<K, V> AdaptiveRadixTreeMap<K, V> {
+impl<K, V> ARTMap<K, V> {
   pub fn new() -> Self {
     Self {
       root: None,
@@ -17,28 +16,28 @@ impl<K, V> AdaptiveRadixTreeMap<K, V> {
 
   pub fn get(&self, _key: &K) -> Option<&V>
   where
-    K: Borrow<[u8]>,
+    K: AsRef<[u8]>,
   {
     todo!()
   }
 
   pub fn get_mut(&mut self, _key: &K) -> Option<&mut V>
   where
-    K: Borrow<[u8]>,
+    K: AsRef<[u8]>,
   {
     todo!()
   }
 
   pub fn insert(&mut self, _key: &K, _value: V) -> Option<V>
   where
-    K: Borrow<[u8]>,
+    K: AsRef<[u8]>,
   {
     todo!()
   }
 
   pub fn remove(&mut self, _key: &K) -> Option<V>
   where
-    K: Borrow<[u8]>,
+    K: AsRef<[u8]>,
   {
     todo!()
   }

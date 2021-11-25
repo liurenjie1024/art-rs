@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::marker::{Immut, Owned};
+use crate::marker::{Immut, Mut, Owned};
 pub(crate) use handle::*;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
@@ -78,6 +78,14 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
 
   /// Temporarily takes out another immutable reference to the same node.
   pub(crate) fn reborrow(&self) -> NodeRef<Immut<'_>, V> {
+    NodeRef {
+      inner: self.inner,
+      _marker: PhantomData,
+    }
+  }
+
+  /// Temporarily takes out a mutable reference to the same node.
+  pub(crate) fn borrow_mut(&mut self) -> NodeRef<Mut<'_>, V> {
     NodeRef {
       inner: self.inner,
       _marker: PhantomData,

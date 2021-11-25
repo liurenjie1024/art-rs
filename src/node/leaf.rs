@@ -33,11 +33,19 @@ impl<'a, V> LeafNodeRef<Immut<'a>, V> {
   pub(crate) fn inner(&self) -> &LeafNode<V> {
     unsafe { self.inner.as_ref() }
   }
+
+  pub(crate) fn into_value_ref(self) -> &'a V {
+    unsafe { &self.inner.as_ref().value }
+  }
 }
 
 impl<'a, V> LeafNodeRef<Mut<'a>, V> {
   pub(crate) fn inner_mut(&mut self) -> &mut LeafNode<V> {
     unsafe { self.inner.as_mut() }
+  }
+
+  pub(crate) fn into_value_mut(mut self) -> &'a mut V {
+    unsafe { &mut self.inner.as_mut().value }
   }
 }
 
@@ -65,6 +73,7 @@ impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
       _marker: PhantomData,
     }
   }
+
   // pub(crate) fn is_lower_bound(self, arg: SearchArgument) -> bool {
   //   let partial_key = arg.partial_key();
   //   let partial_leaf_key = &self.inner().key()[arg.depth()..];

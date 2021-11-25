@@ -6,7 +6,7 @@ use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::NodeKind::Leaf;
-use crate::node::{BoxedLeafNode, BoxedNode, LeafNode, NodeBase, NodeRef, NodeType};
+use crate::node::{BoxedLeafNode, BoxedNode, Handle, LeafNode, NodeBase, NodeRef, NodeType};
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -273,7 +273,7 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   //   todo!()
   // }
   //
-  pub(crate) fn find_child(self, k: u8) -> Option<NodeRef<BorrowType, V>> {
+  pub(crate) fn find_child(self, _k: u8) -> Option<Handle<BorrowType, V>> {
     todo!()
   }
 
@@ -282,6 +282,10 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
       .inner()
       .leaf
       .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::new(ptr) })
+  }
+
+  pub(crate) fn child_at(self, idx: usize) -> NodeRef<BorrowType, V> {
+    todo!()
   }
 }
 
@@ -302,7 +306,7 @@ impl<C: Children, V> InternalNode<C, V> {
     }
   }
 
-  pub(crate) fn partial_prefix(&self) -> &[u8] {
+  pub(crate) fn partial_key(&self) -> &[u8] {
     self.partial_key.as_slice()
   }
 }

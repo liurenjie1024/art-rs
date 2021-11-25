@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 
 pub(crate) enum SearchResult<BorrowType, V> {
   Found(LeafNodeRef<BorrowType, V>),
-  GoDown(NodeRef<BorrowType, V>),
+  GoDown(Handle<BorrowType, V>),
   NotFound,
 }
 
@@ -15,8 +15,8 @@ impl<BorrowType: marker::BorrowType, V> NodeRef<BorrowType, V> {
     loop {
       match self.search_node(key, &mut depth) {
         Found(leaf) => return Some(leaf),
-        GoDown(child) => {
-          self = child;
+        GoDown(handle) => {
+          self = handle.into_node();
         }
         NotFound => return None,
       }
@@ -40,19 +40,19 @@ impl<BorrowType: marker::BorrowType, V> InternalNodeRef<BorrowType, V> {
     }
 
     let input_partial_prefix = &key[*depth..];
-    let this_partial_prefix = self.inner().partial_prefix();
+    let this_partial_prefix = self.inner().partial_key();
 
     if input_partial_prefix.len() > this_partial_prefix.len() {
       match &input_partial_prefix[0..this_partial_prefix.len()].cmp(this_partial_prefix) {
         Ordering::Equal => {
-          let new_depth = *depth + self.inner().partial_prefix().len();
+          let new_depth = *depth + self.inner().partial_key().len();
 
           let k = key[new_depth];
 
           match self.find_child(k) {
-            Some(child) => {
+            Some(handle) => {
               *depth = new_depth + 1;
-              GoDown(child)
+              GoDown(handle)
             }
             None => NotFound,
           }

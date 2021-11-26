@@ -66,6 +66,10 @@ impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
     }
   }
 
+  pub(crate) unsafe fn to_ptr(self) -> BoxedLeafNode<V> {
+    self.inner
+  }
+
   /// Temporarily takes out an immutable reference of same node.
   pub(crate) fn reborrow(&self) -> LeafNodeRef<Immut<'_>, V> {
     LeafNodeRef::<Immut<'_>, V> {

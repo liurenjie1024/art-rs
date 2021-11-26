@@ -7,6 +7,7 @@ use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::NodeKind::Leaf;
 use crate::node::{BoxedLeafNode, BoxedNode, Handle, LeafNode, NodeBase, NodeRef, NodeType};
+use either::Either;
 use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -89,6 +90,10 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
       inner: node_ref.inner.cast(),
       _marker: PhantomData,
     }
+  }
+
+  pub(crate) unsafe fn to_ptr(self) -> BoxedInternalNode<V> {
+    self.inner
   }
 
   #[inline(always)]
@@ -273,7 +278,7 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   //   todo!()
   // }
   //
-  pub(crate) fn find_child(self, _k: u8) -> Option<Handle<BorrowType, V>> {
+  pub(crate) fn find_child(self, _k: u8) -> Either<Handle<BorrowType, V>, Self> {
     todo!()
   }
 

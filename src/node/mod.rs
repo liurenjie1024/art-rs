@@ -126,3 +126,21 @@ impl<BorrowType, V> NodeRef<BorrowType, V> {
     unsafe { self.inner.as_ref() }
   }
 }
+
+impl<BorrowType, V> From<InternalNodeRef<BorrowType, V>> for NodeRef<BorrowType, V> {
+  fn from(internal: InternalNodeRef<BorrowType, V>) -> Self {
+    Self {
+      inner: unsafe { internal.to_ptr().cast() },
+      _marker: PhantomData,
+    }
+  }
+}
+
+impl<BorrowType, V> From<LeafNodeRef<BorrowType, V>> for NodeRef<BorrowType, V> {
+  fn from(leaf: LeafNodeRef<BorrowType, V>) -> Self {
+    Self {
+      inner: unsafe { leaf.to_ptr().cast() },
+      _marker: PhantomData,
+    }
+  }
+}

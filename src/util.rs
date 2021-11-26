@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-pub(crate) fn common_prefix_len(left: &[u8], right: &[u8]) -> usize {
+pub(crate) fn common_len(left: &[u8], right: &[u8]) -> usize {
   if let Some(pos) = left
     .iter()
     .zip(right)

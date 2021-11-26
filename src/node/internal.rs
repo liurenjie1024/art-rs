@@ -1,4 +1,4 @@
-use crate::common_prefix_len;
+use crate::common_len;
 use crate::marker::Immut;
 use crate::node::leaf::LeafNodeRef;
 use crate::node::node16::Node16Children;
@@ -284,7 +284,7 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
     self
       .inner()
       .leaf
-      .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::new(ptr) })
+      .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::from_raw_ptr(ptr) })
   }
 
   pub(crate) fn child_at(self, _idx: usize) -> NodeRef<BorrowType, V> {
@@ -312,6 +312,10 @@ impl<C: Children, V> InternalNode<C, V> {
   pub(crate) fn partial_key(&self) -> &[u8] {
     self.partial_key.as_slice()
   }
+
+  pub(crate) fn prefix_ken(&self) -> usize {
+    self.node_base.prefix_len
+  }
 }
 
 impl<C: Children, V> Default for InternalNode<C, V> {
@@ -322,7 +326,7 @@ impl<C: Children, V> Default for InternalNode<C, V> {
 
 impl PartialKey {
   fn common_prefix_len(&self, key: &[u8]) -> usize {
-    common_prefix_len(self.as_slice(), key)
+    common_len(self.as_slice(), key)
   }
 
   fn as_slice(&self) -> &[u8] {

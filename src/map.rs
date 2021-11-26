@@ -38,7 +38,7 @@ impl<K, V> ARTMap<K, V> {
       .as_mut()?
       .borrow_mut()
       .search_tree(key.as_ref())
-      .map(|leaf| leaf.into_value_mut())
+      .map(|mut leaf| leaf.value_mut())
   }
 
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V>

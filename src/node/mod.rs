@@ -31,6 +31,8 @@ pub(crate) enum NodeType {
 #[repr(C)]
 pub(crate) struct NodeBase<V> {
   node_type: NodeType,
+  /// Prefix length from root until this node.
+  prefix_len: usize,
   _marker: PhantomData<V>,
 }
 

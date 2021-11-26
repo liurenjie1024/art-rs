@@ -11,8 +11,6 @@ pub(crate) struct LeafNode<V> {
   node_base: NodeBase<V>,
   key: Vec<u8>,
   value: V,
-  /// Prefix length in parent.
-  prefix_len: usize,
 }
 
 impl<V> LeafNode<V> {
@@ -41,13 +39,13 @@ impl<'a, V> LeafNodeRef<Mut<'a>, V> {
     unsafe { self.inner.as_mut() }
   }
 
-  pub(crate) fn into_value_mut(mut self) -> &'a mut V {
+  pub(crate) fn value_mut(&mut self) -> &'a mut V {
     unsafe { &mut self.inner.as_mut().value }
   }
 }
 
 impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
-  pub(crate) unsafe fn new(ptr: BoxedLeafNode<V>) -> Self {
+  pub(crate) unsafe fn from_raw_ptr(ptr: BoxedLeafNode<V>) -> Self {
     Self {
       inner: ptr,
       _marker: PhantomData,

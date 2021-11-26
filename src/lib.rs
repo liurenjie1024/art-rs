@@ -1,5 +1,6 @@
 mod borrow;
 mod entry;
+mod insert;
 pub mod map;
 mod marker;
 mod navigate;

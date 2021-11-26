@@ -28,7 +28,7 @@ impl<'a, V> InternalNodeRef<Mut<'a>, V> {
     if common_key_len < this_partial_key.len() {
       /// First create leaf node using new value
       let new_leaf_node = if common_key_len < input_partial_key.len() {
-        
+
       }
     }
   }

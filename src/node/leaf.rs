@@ -147,6 +147,8 @@ impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
 }
 
 impl<V> LeafNode<V> {
+  pub(crate) fn new(prefix_len: usize, key: &[u8], value: V) -> Box<Self> {}
+
   pub(crate) fn set_value(&mut self, mut value: V) -> V {
     swap(&mut self.value, &mut value);
     value

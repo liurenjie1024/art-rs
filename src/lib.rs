@@ -1,5 +1,3 @@
-use std::collections::btree_map::BTreeMap;
-
 mod borrow;
 mod entry;
 pub mod map;

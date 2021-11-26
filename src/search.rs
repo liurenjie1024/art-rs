@@ -1,5 +1,5 @@
 use crate::marker;
-use crate::node::{Handle, InternalNodeRef, LeafNodeRef, NodeKind, NodeRef, PartialKey};
+use crate::node::{Handle, InternalNodeRef, LeafNodeRef, NodeKind, NodeRef};
 use crate::search::SearchResult::{Found, GoDown, NotFound};
 use either::{Either, Left, Right};
 use std::cmp::Ordering;
@@ -12,14 +12,12 @@ pub(crate) enum SearchResult<BorrowType, V> {
 
 impl<BorrowType: marker::BorrowType, V> NodeRef<BorrowType, V> {
   pub(crate) fn search_tree(self, key: &[u8]) -> Option<LeafNodeRef<BorrowType, V>> {
-    let mut cur_parent_ref = None;
     let mut cur = self;
     let mut depth: usize = 0;
     loop {
       match cur.search_node(key, &mut depth) {
         Found(leaf) => return Some(leaf),
         GoDown(handle) => {
-          cur_parent_ref = handle.parent_ref;
           cur = handle.node_ref;
         }
         NotFound(_) => return None,

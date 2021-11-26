@@ -47,6 +47,6 @@ impl<'a, T> DormantMutRef<'a, T> {
   /// all pointers and references derived from it, must not be used anymore.
   pub unsafe fn awaken(self) -> &'a mut T {
     // SAFETY: our own safety conditions imply this reference is again unique.
-    unsafe { &mut *self.ptr.as_ptr() }
+    &mut *self.ptr.as_ptr()
   }
 }

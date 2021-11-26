@@ -1,8 +1,5 @@
-use crate::common_prefix_len;
 use crate::marker::{Immut, Mut};
-use crate::node::node4::Node4Children;
-use crate::node::{InternalNodeRef, NodeBase, NodeRef};
-use std::cmp::min;
+use crate::node::{NodeBase, NodeRef};
 use std::marker::PhantomData;
 use std::mem::swap;
 use std::ptr::NonNull;

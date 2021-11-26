@@ -1,5 +1,4 @@
-use crate::marker::Immut;
-use crate::node::{BoxedInternalNode, BoxedNode, InternalNodeRef, NodeRef};
+use crate::node::{BoxedInternalNode, NodeRef};
 use std::ptr::NonNull;
 
 /// A handle is a pointer to a child node ref in internal node.

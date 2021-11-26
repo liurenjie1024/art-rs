@@ -1,6 +1,5 @@
-use crate::entry::Entry::Occupied;
-use crate::entry::{Entry, OccupiedEntry};
-use crate::node::{NodeRef, Root};
+use crate::entry::Entry;
+use crate::node::Root;
 use crate::DormantMutRef;
 use either::Either;
 use std::marker::PhantomData;
@@ -39,7 +38,7 @@ impl<K, V> ARTMap<K, V> {
       .as_mut()?
       .borrow_mut()
       .search_tree(key.as_ref())
-      .map(|mut leaf| leaf.into_value_mut())
+      .map(|leaf| leaf.into_value_mut())
   }
 
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V>

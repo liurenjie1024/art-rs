@@ -1,9 +1,9 @@
-use crate::node::{BoxedNode, Children, NodeRef, NodeType};
+use crate::node::{BoxedNode, Children, NodeType};
 
 pub(in crate::node) const NODE256_CAPACITY: usize = 256;
 
 pub(crate) struct Node256Children<V> {
-  children: [BoxedNode<V>; NODE256_CAPACITY],
+  _children: [BoxedNode<V>; NODE256_CAPACITY],
 }
 
 impl<V> Default for Node256Children<V> {

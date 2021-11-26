@@ -1,14 +1,12 @@
 use crate::common_prefix_len;
-use crate::marker::{Immut, Owned};
+use crate::marker::Immut;
 use crate::node::leaf::LeafNodeRef;
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
-use crate::node::NodeKind::Leaf;
-use crate::node::{BoxedLeafNode, BoxedNode, Handle, LeafNode, NodeBase, NodeRef, NodeType};
+use crate::node::{BoxedLeafNode, Handle, NodeBase, NodeRef, NodeType};
 use either::Either;
-use std::cmp::{min, Ordering};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
@@ -289,7 +287,7 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
       .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::new(ptr) })
   }
 
-  pub(crate) fn child_at(self, idx: usize) -> NodeRef<BorrowType, V> {
+  pub(crate) fn child_at(self, _idx: usize) -> NodeRef<BorrowType, V> {
     todo!()
   }
 }

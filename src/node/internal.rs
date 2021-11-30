@@ -1,19 +1,17 @@
 use crate::common_len;
-use crate::marker::Immut;
+use crate::marker::{Immut, Mut};
 use crate::node::leaf::LeafNodeRef;
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
-use crate::node::{BoxedLeafNode, Handle, NodeBase, NodeRef, NodeType};
+use crate::node::{BoxedLeafNode, BoxedNode, Handle, NodeBase, NodeRef, NodeType};
 use either::Either;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
+use crate::node::PartialKey::FixSized;
 
 const MAX_PREFIX_LEN: usize = 16;
-
-/// The memory layout of different internal nodes are same, so we use node4 for type erease.
-type InternalNodeBase<V> = InternalNode4<V>;
 
 /// This pointer doesn't have to actually point to a `Node4`, but also possible to point to
 /// internal nodes with other children type. We can infer actual node type from `node_type` in
@@ -31,17 +29,23 @@ pub(crate) enum PartialKey {
   VarSized(Vec<u8>),
 }
 
-#[repr(C)]
-pub(crate) struct InternalNode<C, V> {
+pub(crate) struct InternalNodeBase<V> {
   node_base: NodeBase<V>,
   partial_key: PartialKey,
   leaf: Option<BoxedLeafNode<V>>,
   children_count: u8,
+}
+
+#[repr(C)]
+pub(crate) struct InternalNode<C, V> {
+  base: InternalNodeBase<V>,
   children: C,
 }
 
-pub(crate) trait Children: Default {
+pub(crate) trait Children<V>: Default {
   const NODE_TYPE: NodeType;
+
+  fn insert(&mut self, k: u8, node: BoxedNode<V>) -> Option<BoxedNode<V>>;
 }
 
 impl Fixed {
@@ -82,6 +86,9 @@ impl<'a, V> Clone for InternalNodeRef<Immut<'a>, V> {
 
 impl<'a, V> Copy for InternalNodeRef<Immut<'a>, V> {}
 
+impl<'a, V> InternalNodeRef<Mut<'a>, V> {
+}
+
 impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   pub(crate) unsafe fn from(node_ref: NodeRef<BorrowType, V>) -> Self {
     Self {
@@ -97,6 +104,11 @@ impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
   #[inline(always)]
   pub(crate) fn inner(&self) -> &InternalNodeBase<V> {
     unsafe { self.inner.as_ref() }
+  }
+
+  #[inline(always)]
+  pub(crate) fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
+    unsafe { self.inner.as_mut() }
   }
 
   // #[inline(always)]
@@ -297,15 +309,20 @@ pub(crate) type InternalNode16<V> = InternalNode<Node16Children<V>, V>;
 pub(crate) type InternalNode48<V> = InternalNode<Node48Children<V>, V>;
 pub(crate) type InternalNode256<V> = InternalNode<Node256Children<V>, V>;
 
-impl<C: Children, V> InternalNode<C, V> {
-  pub(crate) fn new(node_type: NodeType) -> Self {
-    assert!(node_type.is_internal());
+impl<V> InternalNodeBase<V> {
+  /// Creates an boxed internal node.
+  ///
+  /// # Safety
+  ///
+  /// A valid internal node should have at least one child, and this method doesn't enforce this
+  /// guarantee.
+  unsafe fn new(node_type: NodeType, prefix_len: usize) -> Self {
+    debug_assert!(node_type.is_internal());
     Self {
-      node_base: NodeBase::new(node_type),
+      node_base: NodeBase::new(C::NODE_TYPE, prefix_len),
       partial_key: PartialKey::default(),
       leaf: None,
       children_count: 0,
-      children: C::default(),
     }
   }
 
@@ -316,11 +333,38 @@ impl<C: Children, V> InternalNode<C, V> {
   pub(crate) fn prefix_ken(&self) -> usize {
     self.node_base.prefix_len
   }
+
+  pub(crate) fn set_partial_key(&mut self, partial_key: &[u8]) {
+    self.partial_key.update(partial_key);
+  }
+
+  pub(crate) fn set_leaf(&mut self, )
 }
 
-impl<C: Children, V> Default for InternalNode<C, V> {
-  fn default() -> Self {
-    InternalNode::new(C::NODE_TYPE)
+impl<C: Children<V>, V> InternalNode<C, V> {
+  pub(crate) unsafe fn new(prefix_len: usize) -> Box<Self> {
+    Box::new(Self {
+      base: InternalNodeBase::new(C::NODE_TYPE, prefix_len),
+      children: C::default(),
+    })
+  }
+
+  pub(crate) fn base(&self) -> &InternalNodeBase<V> {
+    &self.base
+  }
+
+  pub(crate) fn base_mut(&mut self) -> &mut InternalNodeBase<V> {
+    &mut self.base
+  }
+
+  /// Insert node with k and return previous node pointer.
+  ///
+  /// # Safety
+  ///
+  /// This method accepts a raw pointer and owns it afterwards. If a child node with same key
+  /// already exists, it's returned and the caller has its ownership.
+  pub(crate) unsafe fn insert_child(&mut self, k: u8, node_ptr: BoxedNode<V>) -> Option<BoxedNode<V>> {
+    self.children.insert(k, node_ptr)
   }
 }
 
@@ -339,10 +383,47 @@ impl PartialKey {
   pub(crate) fn len(&self) -> usize {
     self.as_slice().len()
   }
+
+  fn update(&mut self, new_partial_key: &[u8]) {
+    match self {
+      PartialKey::FixSized(cur_key) => {
+        if new_partial_key.len() > MAX_PREFIX_LEN {
+          *self = PartialKey::VarSized(Vec::from(new_partial_key));
+        } else {
+          cur_key.update(new_partial_key);
+        }
+      },
+      PartialKey::VarSized(cur_key) => {
+        if new_partial_key.len() > MAX_PREFIX_LEN {
+          cur_key.copy_from_slice(new_partial_key);
+        } else {
+          let fixed_key = FixSized(Fixed::new(new_partial_key));
+          *self = fixed_key;
+        }
+      }
+    }
+  }
 }
 
 impl Default for PartialKey {
   fn default() -> Self {
     PartialKey::FixSized(Fixed::default())
+  }
+}
+
+impl Fixed {
+  fn new(slice: &[u8]) -> Self {
+    debug_assert!(slice.len() < MAX_PREFIX_LEN);
+
+    let mut ret = Self::default();
+    ret.update(slice);
+
+    ret
+  }
+
+  fn update(&mut self, slice: &[u8]) {
+    debug_assert!(slice.len() < MAX_PREFIX_LEN);
+    self.partial_prefix[0..slice.len()].copy_from_slice(slice);
+    self.partial_prefix_len = slice.len();
   }
 }

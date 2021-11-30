@@ -1,5 +1,5 @@
 use crate::marker::{Immut, Mut};
-use crate::node::{NodeBase, NodeRef};
+use crate::node::{NodeBase, NodeRef, NodeType};
 use std::marker::PhantomData;
 use std::mem::swap;
 use std::ptr::NonNull;
@@ -147,7 +147,13 @@ impl<BorrowType, V> LeafNodeRef<BorrowType, V> {
 }
 
 impl<V> LeafNode<V> {
-  pub(crate) fn new(prefix_len: usize, key: &[u8], value: V) -> Box<Self> {}
+  pub(crate) fn new(prefix_len: usize, key: &[u8], value: V) -> Box<Self> {
+    Box::new(Self {
+      node_base: NodeBase::new(NodeType::Leaf, prefix_len),
+      key: Vec::from(key),
+      value
+    })
+  }
 
   pub(crate) fn set_value(&mut self, mut value: V) -> V {
     swap(&mut self.value, &mut value);

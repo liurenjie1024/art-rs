@@ -109,9 +109,10 @@ impl NodeType {
 }
 
 impl<V> NodeBase<V> {
-  pub(crate) fn new(node_type: NodeType) -> Self {
+  pub(crate) fn new(node_type: NodeType, prefix_len: usize) -> Self {
     Self {
       node_type,
+      prefix_len,
       _marker: PhantomData,
     }
   }

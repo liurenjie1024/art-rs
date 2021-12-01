@@ -12,6 +12,9 @@ impl<V> Default for Node256Children<V> {
   }
 }
 
-impl<V> Children for Node256Children<V> {
+impl<V> Children<V> for Node256Children<V> {
   const NODE_TYPE: NodeType = NodeType::Node256;
+  fn insert(&mut self, k: u8, node: BoxedNode<V>) -> Option<BoxedNode<V>> {
+    todo!()
+  }
 }

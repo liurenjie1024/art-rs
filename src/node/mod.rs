@@ -118,12 +118,6 @@ impl<V> NodeBase<V> {
   }
 }
 
-impl<V> From<NodeType> for NodeBase<V> {
-  fn from(node_type: NodeType) -> Self {
-    Self::new(node_type)
-  }
-}
-
 impl<BorrowType, V> NodeRef<BorrowType, V> {
   fn inner(&self) -> &NodeBase<V> {
     unsafe { self.inner.as_ref() }

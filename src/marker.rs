@@ -11,3 +11,7 @@ impl BorrowType for Owned {}
 impl<'a> BorrowType for Immut<'a> {}
 impl<'a> BorrowType for Mut<'a> {}
 
+/// Node Types
+pub enum InternalOrLeaf {}
+pub enum Internal {}
+pub enum Leaf {}

@@ -1,4 +1,4 @@
-use crate::marker::{Immut, Mut};
+use crate::marker::{Immut, Mut, Owned};
 use crate::node::{NodeBase, NodeRef, NodeType};
 use std::marker::PhantomData;
 use std::mem::swap;
@@ -41,6 +41,16 @@ impl<'a, V> LeafNodeRef<Mut<'a>, V> {
 
   pub(crate) fn value_mut(&mut self) -> &'a mut V {
     unsafe { &mut self.inner.as_mut().value }
+  }
+}
+
+impl<V> LeafNodeRef<Owned, V> {
+  pub(crate) fn from_owned(leaf_node: Box<LeafNode<V>>) -> Self {
+    Self {
+      // SAFETY: It's guaranteed by `Box` that this is not null.
+      inner: unsafe { NonNull::new_unchecked(Box::into_raw(leaf_node)) },
+      _marker: PhantomData,
+    }
   }
 }
 
@@ -151,7 +161,7 @@ impl<V> LeafNode<V> {
     Box::new(Self {
       node_base: NodeBase::new(NodeType::Leaf, prefix_len),
       key: Vec::from(key),
-      value
+      value,
     })
   }
 
@@ -161,9 +171,9 @@ impl<V> LeafNode<V> {
   }
 
   pub(crate) fn partial_key(&self) -> &[u8] {
-    if self.prefix_len >= self.key.len() {
+    if self.node_base.prefix_len >= self.key.len() {
       return &[];
     }
-    &self.key[self.prefix_len..]
+    &self.key[self.node_base.prefix_len..]
   }
 }

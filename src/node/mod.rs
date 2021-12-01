@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::marker::{Immut, Mut, Owned};
+use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut, Owned};
 pub(crate) use handle::*;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
@@ -16,7 +16,7 @@ mod node48;
 mod leaf;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
-pub(crate) type Root<V> = NodeRef<Owned, V>;
+pub(crate) type Root<V> = NodeRef<Owned, V, InternalOrLeaf>;
 pub(crate) type BoxedNode<V> = NonNull<NodeBase<V>>;
 
 #[repr(u8)]
@@ -36,12 +36,12 @@ pub(crate) struct NodeBase<V> {
   _marker: PhantomData<V>,
 }
 
-pub(crate) struct NodeRef<BorrowType, V> {
+pub(crate) struct NodeRef<BorrowType, V, NodeType> {
   inner: NonNull<NodeBase<V>>,
   _marker: PhantomData<BorrowType>,
 }
 
-impl<'a, V> Clone for NodeRef<Immut<'a>, V> {
+impl<'a, V, NodeType> Clone for NodeRef<Immut<'a>, V, NodeType> {
   fn clone(&self) -> Self {
     Self {
       inner: self.inner,
@@ -50,49 +50,11 @@ impl<'a, V> Clone for NodeRef<Immut<'a>, V> {
   }
 }
 
-impl<'a, V> Copy for NodeRef<Immut<'a>, V> {}
+impl<'a, V, NodeType> Copy for NodeRef<Immut<'a>, V, NodeType> {}
 
 pub(crate) enum NodeKind<BorrowType, V> {
-  Internal(InternalNodeRef<BorrowType, V>),
-  Leaf(LeafNodeRef<BorrowType, V>),
-}
-
-impl<BorrowType, V> NodeRef<BorrowType, V> {
-  pub(crate) fn downcast(self) -> NodeKind<BorrowType, V> {
-    unsafe {
-      match self.inner().node_type {
-        NodeType::Leaf => NodeKind::Leaf(LeafNodeRef::<BorrowType, V>::from(self)),
-        _ => NodeKind::Internal(InternalNodeRef::<BorrowType, V>::from(self)),
-      }
-    }
-  }
-
-  pub(crate) unsafe fn from_leaf_node_ref(leaf_node: BoxedLeafNode<V>) -> Self {
-    Self {
-      inner: leaf_node.cast(),
-      _marker: PhantomData,
-    }
-  }
-
-  pub(crate) fn minimum_leaf(self) -> LeafNodeRef<BorrowType, V> {
-    unimplemented!()
-  }
-
-  /// Temporarily takes out another immutable reference to the same node.
-  pub(crate) fn reborrow(&self) -> NodeRef<Immut<'_>, V> {
-    NodeRef {
-      inner: self.inner,
-      _marker: PhantomData,
-    }
-  }
-
-  /// Temporarily takes out a mutable reference to the same node.
-  pub(crate) fn borrow_mut(&mut self) -> NodeRef<Mut<'_>, V> {
-    NodeRef {
-      inner: self.inner,
-      _marker: PhantomData,
-    }
-  }
+  Internal(NodeRef<BorrowType, V, Internal>),
+  Leaf(NodeRef<BorrowType, V, Leaf>),
 }
 
 impl NodeType {
@@ -118,26 +80,43 @@ impl<V> NodeBase<V> {
   }
 }
 
-impl<BorrowType, V> NodeRef<BorrowType, V> {
+impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
   fn inner(&self) -> &NodeBase<V> {
     unsafe { self.inner.as_ref() }
   }
-}
 
-impl<BorrowType, V> From<InternalNodeRef<BorrowType, V>> for NodeRef<BorrowType, V> {
-  fn from(internal: InternalNodeRef<BorrowType, V>) -> Self {
-    Self {
-      inner: unsafe { internal.to_ptr().cast() },
+  /// Temporarily takes out another immutable reference to the same node.
+  pub(crate) fn reborrow(&self) -> NodeRef<Immut<'_>, V, NodeType> {
+    NodeRef {
+      inner: self.inner,
+      _marker: PhantomData,
+    }
+  }
+
+  /// Temporarily takes out a mutable reference to the same node.
+  pub(crate) fn borrow_mut(&mut self) -> NodeRef<Mut<'_>, V, NodeType> {
+    NodeRef {
+      inner: self.inner,
       _marker: PhantomData,
     }
   }
 }
 
-impl<BorrowType, V> From<LeafNodeRef<BorrowType, V>> for NodeRef<BorrowType, V> {
-  fn from(leaf: LeafNodeRef<BorrowType, V>) -> Self {
-    Self {
-      inner: unsafe { leaf.to_ptr().cast() },
-      _marker: PhantomData,
+impl<BorrowType, V> NodeRef<BorrowType, V, InternalOrLeaf> {
+  pub(crate) fn downcast(self) -> NodeKind<BorrowType, V> {
+    unsafe {
+      match self.inner().node_type {
+        NodeType::Leaf => NodeKind::Leaf(NodeRef {
+          inner: self.inner,
+          _marker: PhantomData,
+        }),
+        _ => NodeKind::Internal(NodeRef {
+          inner: self.inner,
+          _marker,
+        }),
+      }
     }
   }
 }
+
+impl<BorrowType, V> NodeRef<BorrowType, V, Internal> {}

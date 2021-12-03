@@ -1,9 +1,10 @@
+use either::Either;
+
 use crate::entry::Entry::{Occupied, Vacant};
 use crate::map::ARTMap;
-use crate::marker::Mut;
-use crate::node::{Handle, LeafNodeRef};
+use crate::marker::{Leaf, Mut};
+use crate::node::{Handle, NodeRef};
 use crate::DormantMutRef;
-use either::Either;
 
 pub enum Entry<'a, K, V> {
   Vacant(VacantEntry<'a, K, V>),
@@ -18,7 +19,7 @@ pub struct VacantEntry<'a, K, V> {
 
 pub struct OccupiedEntry<'a, K, V> {
   key: K,
-  node: LeafNodeRef<Mut<'a>, V>,
+  node: NodeRef<Mut<'a>, V, Leaf>,
 }
 
 impl<'a, K, V> Entry<'a, K, V> {
@@ -29,7 +30,7 @@ impl<'a, K, V> Entry<'a, K, V> {
     Entry::Vacant(VacantEntry { key, handle })
   }
 
-  pub(crate) fn new_occupied(key: K, node: LeafNodeRef<Mut<'a>, V>) -> Self {
+  pub(crate) fn new_occupied(key: K, node: NodeRef<Mut<'a>, V, Leaf>) -> Self {
     Entry::Occupied(OccupiedEntry { key, node })
   }
 }
@@ -57,7 +58,7 @@ impl<'a, K: AsRef<[u8]>, V> Entry<'a, K, V> {
   pub fn and_modify<F: FnOnce(&mut V)>(self, f: F) -> Self {
     match self {
       Entry::Occupied(mut entry) => {
-        f(entry.node.value_mut());
+        f(entry.node.as_leaf_mut().value_mut());
         Entry::Occupied(entry)
       }
       Entry::Vacant(e) => Entry::Vacant(e),

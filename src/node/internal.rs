@@ -1,21 +1,14 @@
 use crate::common_len;
-use crate::marker::{Immut, Mut, Owned};
-use crate::node::leaf::LeafNodeRef;
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::PartialKey::FixSized;
-use crate::node::{BoxedLeafNode, BoxedNode, Handle, LeafNode, NodeBase, NodeRef, NodeType};
-use either::Either;
-use std::marker::PhantomData;
+use crate::node::{BoxedNode, LeafNode, NodeBase, NodeRef, NodeType};
 use std::ptr::NonNull;
 
 const MAX_PREFIX_LEN: usize = 16;
 
-/// This pointer doesn't have to actually point to a `Node4`, but also possible to point to
-/// internal nodes with other children type. We can infer actual node type from `node_type` in
-/// `node_base`.
 pub(crate) type BoxedInternalNode<V> = NonNull<InternalNodeBase<V>>;
 
 #[derive(Default)]
@@ -32,7 +25,7 @@ pub(crate) enum PartialKey {
 pub(crate) struct InternalNodeBase<V> {
   node_base: NodeBase<V>,
   partial_key: PartialKey,
-  leaf: Option<BoxedLeafNode<V>>,
+  leaf: Option<BoxedNode<V>>,
   children_count: u8,
 }
 
@@ -61,83 +54,83 @@ impl Fixed {
   }
 }
 
-pub(crate) struct InternalNodeRef<BorrowType, V> {
-  inner: BoxedInternalNode<V>,
-  _marker: PhantomData<BorrowType>,
-}
-
-impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
-  pub(crate) fn new(inner: BoxedInternalNode<V>) -> Self {
-    Self {
-      inner,
-      _marker: PhantomData,
-    }
-  }
-}
-
-impl<'a, V> Clone for InternalNodeRef<Immut<'a>, V> {
-  fn clone(&self) -> Self {
-    Self {
-      inner: self.inner,
-      _marker: PhantomData,
-    }
-  }
-}
-
-impl<'a, V> Copy for InternalNodeRef<Immut<'a>, V> {}
-
-impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
-  pub(crate) fn from_new_node<C: Children<V>>(node: Box<InternalNode<C, V>>) -> Self {
-    Self {
-      // SAFETY: `Box` guarantee that it's nonnull.
-      inner: unsafe { NonNull::new_unchecked(Box::into_raw(node)).cast() },
-      _marker: PhantomData,
-    }
-  }
-
-  pub(crate) unsafe fn from(node_ref: NodeRef<BorrowType, V>) -> Self {
-    Self {
-      inner: node_ref.inner.cast(),
-      _marker: PhantomData,
-    }
-  }
-
-  pub(crate) unsafe fn to_ptr(self) -> BoxedInternalNode<V> {
-    self.inner
-  }
-
-  #[inline(always)]
-  pub(crate) fn inner(&self) -> &InternalNodeBase<V> {
-    unsafe { self.inner.as_ref() }
-  }
-
-  #[inline(always)]
-  pub(crate) fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
-    unsafe { self.inner.as_mut() }
-  }
-
-  pub(crate) fn reborrow(&self) -> InternalNodeRef<Immut<'_>, V> {
-    InternalNodeRef {
-      inner: self.inner,
-      _marker: PhantomData,
-    }
-  }
-
-  pub(crate) fn find_child(self, _k: u8) -> Either<Handle<BorrowType, V>, Self> {
-    todo!()
-  }
-
-  pub(crate) fn get_leaf(&self) -> Option<LeafNodeRef<BorrowType, V>> {
-    self
-      .inner()
-      .leaf
-      .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::from_raw_ptr(ptr) })
-  }
-
-  pub(crate) fn child_at(self, _idx: usize) -> NodeRef<BorrowType, V> {
-    todo!()
-  }
-}
+// pub(crate) struct InternalNodeRef<BorrowType, V> {
+//   inner: BoxedInternalNode<V>,
+//   _marker: PhantomData<BorrowType>,
+// }
+//
+// impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
+//   pub(crate) fn new(inner: BoxedInternalNode<V>) -> Self {
+//     Self {
+//       inner,
+//       _marker: PhantomData,
+//     }
+//   }
+// }
+//
+// impl<'a, V> Clone for InternalNodeRef<Immut<'a>, V> {
+//   fn clone(&self) -> Self {
+//     Self {
+//       inner: self.inner,
+//       _marker: PhantomData,
+//     }
+//   }
+// }
+//
+// impl<'a, V> Copy for InternalNodeRef<Immut<'a>, V> {}
+//
+// impl<BorrowType, V> InternalNodeRef<BorrowType, V> {
+//   pub(crate) fn from_new_node<C: Children<V>>(node: Box<InternalNode<C, V>>) -> Self {
+//     Self {
+//       // SAFETY: `Box` guarantee that it's nonnull.
+//       inner: unsafe { NonNull::new_unchecked(Box::into_raw(node)).cast() },
+//       _marker: PhantomData,
+//     }
+//   }
+//
+//   pub(crate) unsafe fn from(node_ref: NodeRef<BorrowType, V>) -> Self {
+//     Self {
+//       inner: node_ref.inner.cast(),
+//       _marker: PhantomData,
+//     }
+//   }
+//
+//   pub(crate) unsafe fn to_ptr(self) -> BoxedInternalNode<V> {
+//     self.inner
+//   }
+//
+//   #[inline(always)]
+//   pub(crate) fn inner(&self) -> &InternalNodeBase<V> {
+//     unsafe { self.inner.as_ref() }
+//   }
+//
+//   #[inline(always)]
+//   pub(crate) fn inner_mut(&mut self) -> &mut InternalNodeBase<V> {
+//     unsafe { self.inner.as_mut() }
+//   }
+//
+//   pub(crate) fn reborrow(&self) -> InternalNodeRef<Immut<'_>, V> {
+//     InternalNodeRef {
+//       inner: self.inner,
+//       _marker: PhantomData,
+//     }
+//   }
+//
+//   pub(crate) fn find_child(self, _k: u8) -> Either<Handle<BorrowType, V>, Self> {
+//     todo!()
+//   }
+//
+//   pub(crate) fn get_leaf(&self) -> Option<LeafNodeRef<BorrowType, V>> {
+//     self
+//       .inner()
+//       .leaf
+//       .map(|ptr| unsafe { LeafNodeRef::<BorrowType, V>::from_raw_ptr(ptr) })
+//   }
+//
+//   pub(crate) fn child_at(self, _idx: usize) -> NodeRef<BorrowType, V> {
+//     todo!()
+//   }
+// }
 
 pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
 pub(crate) type InternalNode16<V> = InternalNode<Node16Children<V>, V>;
@@ -176,7 +169,7 @@ impl<V> InternalNodeBase<V> {
   pub(crate) fn set_leaf(&mut self, leaf_node: Box<LeafNode<V>>) {
     // SAFETY: `Box` guarantee it's not null.
     unsafe {
-      self.leaf = Some(BoxedLeafNode::new_unchecked(Box::into_raw(leaf_node)));
+      self.leaf = Some(NodeRef::from_new_leaf_node(leaf_node).into_boxed_node());
     }
   }
 

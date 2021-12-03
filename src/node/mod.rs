@@ -38,7 +38,7 @@ pub(crate) struct NodeBase<V> {
 
 pub(crate) struct NodeRef<BorrowType, V, NodeType> {
   inner: NonNull<NodeBase<V>>,
-  _marker: PhantomData<BorrowType>,
+  _marker: PhantomData<(BorrowType, NodeType)>,
 }
 
 impl<'a, V, NodeType> Clone for NodeRef<Immut<'a>, V, NodeType> {
@@ -81,6 +81,10 @@ impl<V> NodeBase<V> {
 }
 
 impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
+  pub(crate) unsafe fn into_boxed_node(self) -> BoxedNode<V> {
+    self.inner
+  }
+
   fn inner(&self) -> &NodeBase<V> {
     unsafe { self.inner.as_ref() }
   }
@@ -100,6 +104,13 @@ impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
       _marker: PhantomData,
     }
   }
+
+  pub(crate) fn forget_type(self) -> NodeRef<BorrowType, V, InternalOrLeaf> {
+    NodeRef {
+      inner: self.inner,
+      _marker: PhantomData,
+    }
+  }
 }
 
 impl<BorrowType, V> NodeRef<BorrowType, V, InternalOrLeaf> {
@@ -112,11 +123,80 @@ impl<BorrowType, V> NodeRef<BorrowType, V, InternalOrLeaf> {
         }),
         _ => NodeKind::Internal(NodeRef {
           inner: self.inner,
-          _marker,
+          _marker: PhantomData,
         }),
       }
     }
   }
 }
 
-impl<BorrowType, V> NodeRef<BorrowType, V, Internal> {}
+impl<BorrowType, V> NodeRef<BorrowType, V, Internal> {
+  pub(crate) fn as_internal_ref(&self) -> &InternalNodeBase<V> {
+    debug_assert!(self.inner().node_type.is_internal());
+    // SAFETY: This is internal node.
+    unsafe { self.inner.cast().as_ref() }
+  }
+
+  pub(crate) fn as_internal_mut(&mut self) -> &mut InternalNodeBase<V> {
+    debug_assert!(self.inner().node_type.is_internal());
+    // SAFETY: This is internal node.
+    unsafe { self.inner.cast().as_mut() }
+  }
+
+  pub(crate) fn find_child(&self, _k: u8) -> Option<Handle<BorrowType, V>> {
+    todo!()
+  }
+
+  pub(crate) fn get_leaf(&self) -> Option<NodeRef<BorrowType, V, Leaf>> {
+    todo!()
+  }
+}
+
+impl<BorrowType, V> NodeRef<BorrowType, V, Leaf> {
+  fn as_leaf_ptr(&self) -> *mut LeafNode<V> {
+    debug_assert!(self.inner().node_type.is_leaf());
+    self.inner.cast().as_ptr()
+  }
+
+  pub(crate) fn as_leaf_ref(&self) -> &LeafNode<V> {
+    debug_assert!(self.inner().node_type.is_leaf());
+    // SAFETY: This is leaf node.
+    unsafe { self.inner.cast().as_ref() }
+  }
+
+  pub(crate) fn as_leaf_mut(&mut self) -> &mut LeafNode<V> {
+    debug_assert!(self.inner().node_type.is_leaf());
+    // SAFETY: This is leaf node.
+    unsafe { self.inner.cast().as_mut() }
+  }
+}
+
+impl<'a, V> NodeRef<Mut<'a>, V, Leaf> {
+  pub(crate) fn value_mut(self) -> &'a mut V {
+    unsafe { (&mut *self.as_leaf_ptr()).value_mut() }
+  }
+}
+
+impl<'a, V> NodeRef<Immut<'a>, V, Leaf> {
+  pub(crate) fn value_ref(self) -> &'a V {
+    unsafe { (&*self.as_leaf_ptr()).value_ref() }
+  }
+}
+
+impl<V> NodeRef<Owned, V, Leaf> {
+  pub(crate) fn from_new_leaf_node(leaf: Box<LeafNode<V>>) -> Self {
+    Self {
+      inner: NonNull::from(Box::leak(leaf)).cast(),
+      _marker: PhantomData,
+    }
+  }
+}
+
+impl<V> NodeRef<Owned, V, Internal> {
+  pub(crate) fn from_new_internal_node<C>(leaf: Box<InternalNode<C, V>>) -> Self {
+    Self {
+      inner: NonNull::from(Box::leak(leaf)).cast(),
+      _marker: PhantomData,
+    }
+  }
+}

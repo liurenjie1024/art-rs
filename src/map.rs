@@ -26,7 +26,7 @@ impl<K, V> ARTMap<K, V> {
       .as_ref()?
       .reborrow()
       .search_tree(key.as_ref())
-      .map(|leaf| leaf.into_value_ref())
+      .map(|leaf| leaf.value_ref())
   }
 
   pub fn get_mut(&mut self, key: &K) -> Option<&mut V>

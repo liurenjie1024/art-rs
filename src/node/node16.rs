@@ -16,7 +16,7 @@ impl<V> Default for Node16Children<V> {
 impl<V> Children<V> for Node16Children<V> {
   const NODE_TYPE: NodeType = NodeType::Node16;
 
-  fn insert(&mut self, k: u8, node: BoxedNode<V>) -> Option<BoxedNode<V>> {
+  fn insert(&mut self, _k: u8, _node: BoxedNode<V>) -> Option<BoxedNode<V>> {
     todo!()
   }
 }

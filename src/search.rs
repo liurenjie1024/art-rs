@@ -2,7 +2,7 @@ use crate::marker;
 use crate::marker::{Internal, InternalOrLeaf, Leaf};
 use crate::node::{Handle, NodeKind, NodeRef};
 use crate::search::SearchResult::{Found, GoDown, NotFound};
-use either::{Either, Left, Right};
+use either::{Either};
 use std::cmp::Ordering;
 
 pub(crate) enum SearchResult<BorrowType, V> {

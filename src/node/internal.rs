@@ -175,8 +175,8 @@ impl<V> InternalNodeBase<V> {
 
   pub(crate) unsafe fn insert_child(
     &mut self,
-    k: u8,
-    node_ptr: BoxedNode<V>,
+    _k: u8,
+    _node_ptr: BoxedNode<V>,
   ) -> Option<BoxedNode<V>> {
     todo!()
   }

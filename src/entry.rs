@@ -36,15 +36,15 @@ impl<'a, K, V> Entry<'a, K, V> {
 }
 
 impl<'a, K: AsRef<[u8]>, V> Entry<'a, K, V> {
-  pub fn or_insert(self, default: V) -> &'a mut V {
+  pub fn or_insert(self, _default: V) -> &'a mut V {
     todo!()
   }
 
-  pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+  pub fn or_insert_with<F: FnOnce() -> V>(self, _default: F) -> &'a mut V {
     todo!()
   }
 
-  pub fn or_insert_with_key<F: FnOnce(&K) -> V>(self, default: F) -> &'a mut V {
+  pub fn or_insert_with_key<F: FnOnce(&K) -> V>(self, _default: F) -> &'a mut V {
     todo!()
   }
 
@@ -81,7 +81,7 @@ impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
     self.key
   }
 
-  pub fn insert(self, value: V) -> &'a mut V {
+  pub fn insert(self, _value: V) -> &'a mut V {
     todo!()
   }
 }

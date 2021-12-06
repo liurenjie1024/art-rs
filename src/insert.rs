@@ -54,9 +54,12 @@ impl<'a, V> NodeRef<Mut<'a>, V, Internal> {
           key,
           value,
         );
-        if let Some(_) =
-          unsafe { new_parent.insert_child(new_k, NonNull::from(Box::leak(new_leaf_node)).cast()) }
-        {
+        if let Some(_) = unsafe {
+          new_parent.insert_child(
+            new_k,
+            NodeRef::from_new_leaf_node(new_leaf_node).into_boxed_node(),
+          )
+        } {
           unreachable!("This should not happen!");
         }
       } else {

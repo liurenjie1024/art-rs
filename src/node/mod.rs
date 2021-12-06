@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut, Owned};
 pub(crate) use handle::*;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
+
+use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut, Owned};
 
 mod handle;
 mod internal;
@@ -32,6 +33,7 @@ pub(crate) enum NodeType {
 pub(crate) struct NodeBase<V> {
   node_type: NodeType,
   /// Prefix length from root until this node.
+  // TODO: We should remove this to save memory
   prefix_len: usize,
   _marker: PhantomData<V>,
 }
@@ -78,6 +80,19 @@ impl<V> NodeBase<V> {
       _marker: PhantomData,
     }
   }
+
+  pub(crate) fn prefix_len(&self) -> usize {
+    self.prefix_len
+  }
+
+  /// Sets the new prefix length of this node.
+  ///
+  /// # Safety
+  ///
+  /// For leaf node, this should not be larger than length.
+  unsafe fn set_prefix_len(&mut self, new_prefix_len: usize) {
+    self.prefix_len = new_prefix_len;
+  }
 }
 
 impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
@@ -85,7 +100,7 @@ impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
     self.inner
   }
 
-  fn inner(&self) -> &NodeBase<V> {
+  pub(crate) fn as_base_ref(&self) -> &NodeBase<V> {
     unsafe { self.inner.as_ref() }
   }
 
@@ -115,30 +130,34 @@ impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
 
 impl<BorrowType, V> NodeRef<BorrowType, V, InternalOrLeaf> {
   pub(crate) fn downcast(self) -> NodeKind<BorrowType, V> {
-    unsafe {
-      match self.inner().node_type {
-        NodeType::Leaf => NodeKind::Leaf(NodeRef {
-          inner: self.inner,
-          _marker: PhantomData,
-        }),
-        _ => NodeKind::Internal(NodeRef {
-          inner: self.inner,
-          _marker: PhantomData,
-        }),
-      }
+    match self.as_base_ref().node_type {
+      NodeType::Leaf => NodeKind::Leaf(NodeRef {
+        inner: self.inner,
+        _marker: PhantomData,
+      }),
+      _ => NodeKind::Internal(NodeRef {
+        inner: self.inner,
+        _marker: PhantomData,
+      }),
     }
+  }
+}
+
+impl<'a, V, NodeType> NodeRef<Mut<'a>, V, NodeType> {
+  pub(crate) fn as_base_mut(&mut self) -> &mut NodeBase<V> {
+    unsafe { self.inner.as_mut() }
   }
 }
 
 impl<BorrowType, V> NodeRef<BorrowType, V, Internal> {
   pub(crate) fn as_internal_ref(&self) -> &InternalNodeBase<V> {
-    debug_assert!(self.inner().node_type.is_internal());
+    debug_assert!(self.as_base_ref().node_type.is_internal());
     // SAFETY: This is internal node.
     unsafe { self.inner.cast().as_ref() }
   }
 
   pub(crate) fn as_internal_mut(&mut self) -> &mut InternalNodeBase<V> {
-    debug_assert!(self.inner().node_type.is_internal());
+    debug_assert!(self.as_base_ref().node_type.is_internal());
     // SAFETY: This is internal node.
     unsafe { self.inner.cast().as_mut() }
   }
@@ -154,18 +173,18 @@ impl<BorrowType, V> NodeRef<BorrowType, V, Internal> {
 
 impl<BorrowType, V> NodeRef<BorrowType, V, Leaf> {
   fn as_leaf_ptr(&self) -> *mut LeafNode<V> {
-    debug_assert!(self.inner().node_type.is_leaf());
+    debug_assert!(self.as_base_ref().node_type.is_leaf());
     self.inner.cast().as_ptr()
   }
 
   pub(crate) fn as_leaf_ref(&self) -> &LeafNode<V> {
-    debug_assert!(self.inner().node_type.is_leaf());
+    debug_assert!(self.as_base_ref().node_type.is_leaf());
     // SAFETY: This is leaf node.
     unsafe { self.inner.cast().as_ref() }
   }
 
   pub(crate) fn as_leaf_mut(&mut self) -> &mut LeafNode<V> {
-    debug_assert!(self.inner().node_type.is_leaf());
+    debug_assert!(self.as_base_ref().node_type.is_leaf());
     // SAFETY: This is leaf node.
     unsafe { self.inner.cast().as_mut() }
   }
@@ -174,6 +193,13 @@ impl<BorrowType, V> NodeRef<BorrowType, V, Leaf> {
 impl<'a, V> NodeRef<Mut<'a>, V, Leaf> {
   pub(crate) fn value_mut(self) -> &'a mut V {
     unsafe { (&mut *self.as_leaf_ptr()).value_mut() }
+  }
+
+  pub(crate) fn set_prefix_len(&mut self, new_prefix_len: usize) {
+    assert!(self.as_base_ref().prefix_len() >= new_prefix_len);
+    unsafe {
+      self.as_base_mut().set_prefix_len(new_prefix_len);
+    }
   }
 }
 

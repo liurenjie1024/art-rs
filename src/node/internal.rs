@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use crate::common_len;
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
@@ -9,8 +7,6 @@ use crate::node::PartialKey::FixSized;
 use crate::node::{BoxedNode, LeafNode, NodeBase, NodeRef, NodeType};
 
 const MAX_PREFIX_LEN: usize = 16;
-
-pub(crate) type BoxedInternalNode<V> = NonNull<InternalNodeBase<V>>;
 
 #[derive(Default)]
 pub(crate) struct Fixed {
@@ -81,7 +77,7 @@ impl<V> InternalNodeBase<V> {
     self.partial_key.as_slice()
   }
 
-  pub(crate) fn prefix_ken(&self) -> usize {
+  pub(crate) fn prefix_len(&self) -> usize {
     self.node_base.prefix_len
   }
 

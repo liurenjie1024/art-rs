@@ -55,11 +55,17 @@ impl<K, V> ARTMap<K, V> {
     }
   }
 
-  pub fn insert(&mut self, _key: &K, _value: V) -> Option<V>
+  pub fn insert(&mut self, key: K, value: V) -> Option<V>
   where
     K: AsRef<[u8]>,
   {
-    todo!()
+    match self.entry(key) {
+      Entry::Occupied(mut entry) => Some(entry.insert(value)),
+      Entry::Vacant(entry) => {
+        entry.insert(value);
+        None
+      }
+    }
   }
 
   pub fn remove(&mut self, _key: &K) -> Option<V>

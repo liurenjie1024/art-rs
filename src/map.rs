@@ -69,3 +69,15 @@ impl<K, V> ARTMap<K, V> {
     todo!()
   }
 }
+
+impl<K, V> ARTMap<K, V> {
+  /// Inits the root.
+  ///
+  /// # Panics
+  ///
+  /// If root is not `None`, we should panic.
+  pub(crate) unsafe fn init_root(&mut self, root: Root<V>) {
+    assert!(self.root.is_none());
+    self.root = Some(root);
+  }
+}

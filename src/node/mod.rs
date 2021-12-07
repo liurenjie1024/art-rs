@@ -17,6 +17,7 @@ mod node48;
 mod leaf;
 
 pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
+
 pub(crate) type Root<V> = NodeRef<Owned, V, InternalOrLeaf>;
 pub(crate) type BoxedNode<V> = NonNull<NodeBase<V>>;
 
@@ -96,7 +97,7 @@ impl<V> NodeBase<V> {
 }
 
 impl<BorrowType, V, NodeType> NodeRef<BorrowType, V, NodeType> {
-  pub(crate) unsafe fn into_boxed_node(self) -> BoxedNode<V> {
+  pub(crate) unsafe fn inner(&self) -> BoxedNode<V> {
     self.inner
   }
 

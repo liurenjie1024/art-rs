@@ -88,7 +88,7 @@ impl<V> InternalNodeBase<V> {
   pub(crate) fn set_leaf(&mut self, leaf_node: Box<LeafNode<V>>) {
     // SAFETY: `Box` guarantee it's not null.
     unsafe {
-      self.leaf = Some(NodeRef::from_new_leaf_node(leaf_node).into_boxed_node());
+      self.leaf = Some(NodeRef::from_new_leaf_node(leaf_node).inner());
     }
   }
 

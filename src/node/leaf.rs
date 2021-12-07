@@ -1,4 +1,5 @@
 use std::mem::swap;
+use std::ptr::NonNull;
 
 use crate::node::{NodeBase, NodeType};
 
@@ -44,5 +45,9 @@ impl<V> LeafNode<V> {
 
   pub(crate) fn value_ref(&self) -> &V {
     &self.value
+  }
+
+  pub(crate) fn value_ptr(&mut self) -> NonNull<V> {
+    NonNull::from(&mut self.value)
   }
 }

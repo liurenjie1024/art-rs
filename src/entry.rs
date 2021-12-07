@@ -81,6 +81,23 @@ impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
     self.key
   }
 
+  // pub fn insert(self, value: V) -> &'a mut V {
+  //   match self.handle {
+  //     Either::Left(tree_ref) => {
+  //       // An empty tree, just create a node and modify root
+  //       let mut root= NodeRef::from_new_leaf_node(LeafNode::new(0, self.key.as_ref(), value));
+  //       // SAFETY: `DormantMutRef` only appears when tree is empty
+  //       let mut ptr = root.as_leaf_mut().value_ptr();
+  //       unsafe {
+  //         tree_ref.awaken().init_root(root.forget_type());
+  //         ptr.as_mut()
+  //       }
+  //     },
+  //     Either::Right(handle) => {
+  //       handle.insert_node()
+  //     }
+  //   }
+  // }
   pub fn insert(self, _value: V) -> &'a mut V {
     todo!()
   }

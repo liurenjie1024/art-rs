@@ -21,7 +21,7 @@ impl<'a, V> Handle<Mut<'a>, V> {
   ///
   /// If same key already exists.
   pub(crate) fn insert_node(self, key: &[u8], value: V) -> NonNull<V> {
-    let mut parent_ref = self.parent_ref;
+    let parent_ref = self.parent_ref;
     let (new_node, leaf_value_ptr) = match self.node_ref.downcast() {
       NodeKind::Internal(internal) => {
         match internal.insert_node(key, value) {

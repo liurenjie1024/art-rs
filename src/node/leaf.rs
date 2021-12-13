@@ -6,22 +6,22 @@ use crate::node::{NodeBase, NodeType};
 // pub(crate) type BoxedLeafNode<V> = NonNull<LeafNode<V>>;
 
 #[repr(C)]
-pub(crate) struct LeafNode<V> {
-  node_base: NodeBase<V>,
-  key: Vec<u8>,
+pub(crate) struct LeafNode<K, V> {
+  node_base: NodeBase<K, V>,
+  key: K,
   value: V,
 }
 
-impl<V> LeafNode<V> {
+impl<K, V> LeafNode<K, V> {
   pub(crate) fn key(&self) -> &[u8] {
     &self.key
   }
 }
 
-impl<V> LeafNode<V> {
-  pub(crate) fn new(prefix_len: usize, key: &[u8], value: V) -> Box<Self> {
+impl<K, V> LeafNode<K, V> {
+  pub(crate) fn new(key: &[u8], value: V) -> Box<Self> {
     Box::new(Self {
-      node_base: NodeBase::new(NodeType::Leaf, prefix_len),
+      node_base: NodeBase::new(NodeType::Leaf),
       key: Vec::from(key),
       value,
     })

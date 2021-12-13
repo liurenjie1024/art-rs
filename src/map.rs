@@ -82,7 +82,7 @@ impl<K, V> ARTMap<K, V> {
   /// # Panics
   ///
   /// If root is not `None`, we should panic.
-  pub(crate) unsafe fn init_root(&mut self, root: Root<V>) {
+  pub(crate) unsafe fn init_root(&mut self, root: Root<K, V>) {
     assert!(self.root.is_none());
     self.root = Some(root);
   }

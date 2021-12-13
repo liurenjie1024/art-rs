@@ -19,23 +19,23 @@ pub(crate) enum PartialKey {
   VarSized(Vec<u8>),
 }
 
-pub(crate) struct InternalNodeBase<V> {
-  node_base: NodeBase<V>,
+pub(crate) struct InternalNodeBase<K, V> {
+  node_base: NodeBase<K, V>,
   partial_key: PartialKey,
-  leaf: Option<BoxedNode<V>>,
+  leaf: Option<BoxedNode<K, V>>,
   children_count: u8,
 }
 
 #[repr(C)]
-pub(crate) struct InternalNode<C, V> {
-  base: InternalNodeBase<V>,
+pub(crate) struct InternalNode<C, K, V> {
+  base: InternalNodeBase<K, V>,
   children: C,
 }
 
-pub(crate) trait Children<V>: Default {
+pub(crate) trait Children<K, V>: Default {
   const NODE_TYPE: NodeType;
 
-  fn insert(&mut self, k: u8, node: BoxedNode<V>) -> Option<BoxedNode<V>>;
+  fn insert(&mut self, k: u8, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>>;
 }
 
 impl Fixed {
@@ -51,22 +51,22 @@ impl Fixed {
   }
 }
 
-pub(crate) type InternalNode4<V> = InternalNode<Node4Children<V>, V>;
-pub(crate) type InternalNode16<V> = InternalNode<Node16Children<V>, V>;
-pub(crate) type InternalNode48<V> = InternalNode<Node48Children<V>, V>;
-pub(crate) type InternalNode256<V> = InternalNode<Node256Children<V>, V>;
+pub(crate) type InternalNode4<K, V> = InternalNode<Node4Children<K, V>, K, V>;
+pub(crate) type InternalNode16<K, V> = InternalNode<Node16Children<K, V>, K, V>;
+pub(crate) type InternalNode48<K, V> = InternalNode<Node48Children<K, V>, K, V>;
+pub(crate) type InternalNode256<K, V> = InternalNode<Node256Children<K, V>, K, V>;
 
-impl<V> InternalNodeBase<V> {
+impl<K, V> InternalNodeBase<K, V> {
   /// Creates an boxed internal node.
   ///
   /// # Safety
   ///
   /// A valid internal node should have at least one child, and this method doesn't enforce this
   /// guarantee.
-  unsafe fn new(node_type: NodeType, prefix_len: usize) -> Self {
+  unsafe fn new(node_type: NodeType) -> Self {
     debug_assert!(node_type.is_internal());
     Self {
-      node_base: NodeBase::new(node_type, prefix_len),
+      node_base: NodeBase::new(node_type),
       partial_key: PartialKey::default(),
       leaf: None,
       children_count: 0,
@@ -85,7 +85,7 @@ impl<V> InternalNodeBase<V> {
     self.partial_key.update(partial_key);
   }
 
-  pub(crate) fn set_leaf(&mut self, leaf_node: Box<LeafNode<V>>) {
+  pub(crate) fn set_leaf(&mut self, leaf_node: Box<LeafNode<K, V>>) {
     // SAFETY: `Box` guarantee it's not null.
     unsafe {
       self.leaf = Some(NodeRef::from_new_leaf_node(leaf_node).inner());
@@ -95,25 +95,25 @@ impl<V> InternalNodeBase<V> {
   pub(crate) unsafe fn insert_child(
     &mut self,
     _k: u8,
-    _node_ptr: BoxedNode<V>,
-  ) -> Option<BoxedNode<V>> {
+    _node_ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
     todo!()
   }
 }
 
-impl<C: Children<V>, V> InternalNode<C, V> {
-  pub(crate) unsafe fn new(prefix_len: usize) -> Box<Self> {
+impl<K, V, C: Children<K, V>> InternalNode<C, K, V> {
+  pub(crate) unsafe fn new() -> Box<Self> {
     Box::new(Self {
-      base: InternalNodeBase::new(C::NODE_TYPE, prefix_len),
+      base: InternalNodeBase::new(C::NODE_TYPE),
       children: C::default(),
     })
   }
 
-  pub(crate) fn base(&self) -> &InternalNodeBase<V> {
+  pub(crate) fn base(&self) -> &InternalNodeBase<K, V> {
     &self.base
   }
 
-  pub(crate) fn base_mut(&mut self) -> &mut InternalNodeBase<V> {
+  pub(crate) fn base_mut(&mut self) -> &mut InternalNodeBase<K, V> {
     &mut self.base
   }
 
@@ -126,8 +126,8 @@ impl<C: Children<V>, V> InternalNode<C, V> {
   pub(crate) unsafe fn insert_child(
     &mut self,
     k: u8,
-    node_ptr: BoxedNode<V>,
-  ) -> Option<BoxedNode<V>> {
+    node_ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
     self.children.insert(k, node_ptr)
   }
 }

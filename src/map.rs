@@ -2,18 +2,15 @@ use crate::entry::Entry;
 use crate::node::Root;
 use crate::DormantMutRef;
 use either::Either;
-use std::marker::PhantomData;
 
 pub struct ARTMap<K, V> {
-  root: Option<Root<V>>,
-  _phantom: PhantomData<K>,
+  root: Option<Root<K, V>>,
 }
 
 impl<K, V> ARTMap<K, V> {
   pub fn new() -> Self {
     Self {
       root: None,
-      _phantom: PhantomData,
     }
   }
 

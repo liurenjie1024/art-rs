@@ -7,7 +7,7 @@ use crate::common_len;
 use crate::marker::{Internal, Leaf, Mut, Owned};
 use crate::node::{Handle, InternalNode4, LeafNode, NodeKind, NodeRef};
 
-impl<'a, K, V> Handle<Mut<'a>, K, V> {
+impl<'a, K: AsRef<[u8]>, V> Handle<Mut<'a>, K, V> {
     /// Insert `key`, `value` into this node.
     ///
     /// This method is designed to be used by entry api, which already checked prefix against parents
@@ -20,9 +20,8 @@ impl<'a, K, V> Handle<Mut<'a>, K, V> {
     /// # Panics
     ///
     /// If same key already exists.
-    pub(crate) fn insert_node(self, key: &[u8], value: V) -> NonNull<V> {
-        let parent_ref = self.parent_ref;
-        let (new_node, leaf_value_ptr) = match self.node_ref().downcast() {
+    pub(crate) fn insert_node(self, key: K, value: V) -> NonNull<V> {
+        let (new_node, leaf_value_ptr) = match self.node.downcast() {
             NodeKind::Internal(internal) => {
                 match internal.insert_node(key, value) {
                     (Either::Left(origin_internal_node), leaf_value_ptr) => (unsafe { origin_internal_node.inner() }, leaf_value_ptr),
@@ -35,26 +34,21 @@ impl<'a, K, V> Handle<Mut<'a>, K, V> {
             }
         };
 
-        if let Some(mut ptr) = parent_ref {
-            unsafe {
-                *ptr.as_mut() = new_node;
-            }
-        }
 
         leaf_value_ptr
     }
 }
 
-impl<'a, K, V> NodeRef<Mut<'a>, K, V, Internal> {
+impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
     /// Insert into current node.
     ///
     /// # Returns
     ///
     /// When current node doesn't need to split to new node, just return itself.
     /// Otherwise, returns a newly created node.
-    fn insert_node(mut self, key: &[u8], value: V) -> (Either<Self, NodeRef<Owned, K, V, Internal>>, NonNull<V>) {
-        let this_partial_key = self.as_internal_ref().partial_key();
-        let input_partial_key = &key[self.as_internal_ref().prefix_len()..];
+    fn insert_node(mut self, key: K, value: V) -> (Either<Self, NodeRef<Owned, K, V, Internal>>, NonNull<V>) {
+        let this_partial_key = self.as_internal_ref().partial_prefix();
+        let input_partial_key = &key.as_ref()[self.prefix_len()..];
 
         let common_key_len = common_len(this_partial_key, input_partial_key);
 
@@ -136,10 +130,10 @@ impl<'a, K, V> NodeRef<Mut<'a>, K, V, Internal> {
     }
 }
 
-impl<'a, K, V> NodeRef<Mut<'a>, K, V, Leaf> {
-    fn insert_node(mut self, key: &[u8], value: V) -> (NodeRef<Owned, K, V, Internal>, NonNull<V>) {
-        let this_partial_key = self.as_leaf_ref().partial_key();
-        let input_partial_key = &key[self.as_leaf_ref().partial_key().len()..];
+impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
+    fn insert_node(mut self, key: K, value: V) -> (NodeRef<Owned, K, V, Internal>, NonNull<V>) {
+        let this_partial_key = self.partial_key();
+        let input_partial_key = &key.as_ref()[self.partial_key().len()..];
 
         let common_key_len = common_len(this_partial_key, input_partial_key);
 
@@ -153,7 +147,7 @@ impl<'a, K, V> NodeRef<Mut<'a>, K, V, Leaf> {
         let leaf_value_ptr = {
             if common_key_len < input_partial_key.len() {
                 let new_k = input_partial_key[common_key_len];
-                let new_prefix_len = self.as_base_ref().prefix_len() + common_key_len + 1;
+                let new_prefix_len = self.prefix_len() + common_key_len + 1;
                 let mut new_leaf = LeafNode::new(key, value);
                 let leaf_value_ptr = NonNull::from(new_leaf.value_mut());
                 unsafe {
@@ -175,12 +169,12 @@ impl<'a, K, V> NodeRef<Mut<'a>, K, V, Leaf> {
         {
             if common_key_len < this_partial_key.len() {
                 let new_k = this_partial_key[common_key_len];
-                self.set_prefix_len(self.as_base_ref().prefix_len() + common_key_len + 1);
+                self.set_prefix_len(self.prefix_len() + common_key_len + 1);
                 unsafe {
                     new_parent.insert_child(new_k, self.inner());
                 }
             } else {
-                self.set_prefix_len(self.as_base_ref().prefix_len() + common_key_len);
+                self.set_prefix_len(self.prefix_len() + common_key_len);
                 unsafe {
                     new_parent
                         .base_mut()

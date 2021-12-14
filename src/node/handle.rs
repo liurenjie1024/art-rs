@@ -1,6 +1,5 @@
-use std::ptr::NonNull;
 use crate::marker::{Internal, InternalOrLeaf};
-use crate::node::{BoxedNode, NodeRef};
+use crate::node::{NodeRef};
 
 /// Position of a child node in internal node.
 pub(crate) enum NodePos {
@@ -14,22 +13,26 @@ pub(crate) enum NodePos {
 ///
 /// We need this because when we want to do modify a node, we also need to update pointer in parent.
 pub(crate) struct Handle<BorrowType, K, V> {
-    pub(crate) node_ref: NodeRef<BorrowType, K, V, Internal>,
+    pub(crate) node: NodeRef<BorrowType, K, V, Internal>,
     pub(crate) pos: NodePos,
 }
 
 impl<BorrowType, K, V> Handle<BorrowType, K, V> {
     pub(crate) fn new(
-      node_ref: NodeRef<BorrowType, K, V, Internal>,
-      pos: NodePos,
+        node_ref: NodeRef<BorrowType, K, V, Internal>,
+        pos: NodePos,
     ) -> Self {
         Self {
-            node_ref,
+            node: node_ref,
             pos,
         }
     }
 
-    pub(crate) fn node_ref(&self) -> &NodeRef<BorrowType, K, V, Internal> {
-        &self.node_ref
+    /// Resolve the actual node reference this handle points to.
+    pub(crate) fn resolve_node(&self) -> NodeRef<BorrowType, K, V, InternalOrLeaf> {
+        match self.pos {
+            NodePos::Child(idx) => self.node.child_at(idx),
+            NodePos::Leaf => self.node.get_leaf().unwrap()
+        }
     }
 }

@@ -107,7 +107,7 @@ impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
                 }
             }
             Either::Right(handle) => {
-                unsafe { handle.insert_node(self.key.as_ref(), value).as_mut() }
+                unsafe { handle.insert_node(self.key, value).as_mut() }
             }
         }
     }

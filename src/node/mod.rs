@@ -182,7 +182,7 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
             .map(|leaf_ptr| NodeRef {
                 inner: leaf_ptr,
                 prefix_len: leaf_prefix_len,
-                _marker,
+                _marker: PhantomData
             })
     }
 
@@ -192,7 +192,7 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
         NodeRef {
             inner: internal_ref.child_at(idx),
             prefix_len: child_prefix_len,
-            _marker,
+            _marker: PhantomData
         }
     }
 }
@@ -240,13 +240,6 @@ impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
             self.set_prefix_len(new_prefix_len);
         }
     }
-
-    pub(crate) fn partial_key(&self) -> &[u8] {
-        if self.refix_len >= self.key.len() {
-            return &[];
-        }
-        &self.key[self.node_base.prefix_len..]
-    }
 }
 
 impl<'a, K, V> NodeRef<Immut<'a>, K, V, Leaf> {
@@ -256,18 +249,20 @@ impl<'a, K, V> NodeRef<Immut<'a>, K, V, Leaf> {
 }
 
 impl<K, V> NodeRef<Owned, K, V, Leaf> {
-    pub(crate) fn from_new_leaf_node(leaf: Box<LeafNode<K, V>>) -> Self {
+    pub(crate) fn from_new_leaf_node(prefix_len: usize, leaf: Box<LeafNode<K, V>>) -> Self {
         Self {
             inner: NonNull::from(Box::leak(leaf)).cast(),
+            prefix_len,
             _marker: PhantomData,
         }
     }
 }
 
 impl<K, V> NodeRef<Owned, K, V, Internal> {
-    pub(crate) fn from_new_internal_node<C>(leaf: Box<InternalNode<C, K, V>>) -> Self {
+    pub(crate) fn from_new_internal_node<C>(prefix_len: usize, leaf: Box<InternalNode<C, K, V>>) -> Self {
         Self {
             inner: NonNull::from(Box::leak(leaf)).cast(),
+            prefix_len,
             _marker: PhantomData,
         }
     }

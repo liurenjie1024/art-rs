@@ -29,7 +29,7 @@ impl<BorrowType, K, V> Handle<BorrowType, K, V> {
   pub(crate) fn resolve_node(&self) -> NodeRef<BorrowType, K, V, InternalOrLeaf> {
     match self.pos {
       NodePos::Child(idx) => self.node.child_at(idx),
-      NodePos::Leaf => self.node.get_leaf().unwrap(),
+      NodePos::Leaf => self.node.get_leaf().unwrap().forget_type(),
     }
   }
 

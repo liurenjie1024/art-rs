@@ -30,30 +30,30 @@ impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V
     self,
     key: K,
   ) -> Either<NodeRef<BorrowType, K, V, InternalOrLeaf>, Handle<BorrowType, K, V>> {
-    let mut handle = None;
+    let mut cur_handle = None;
     let mut cur = self;
     loop {
       match cur.search_node(key.as_ref()) {
         Found(leaf) => {
-          if let Some(parent_handle) = handle {
+          if let Some(parent_handle) = cur_handle {
             // Non root node
-            Either::Right(parent_handle)
+            return Either::Right(parent_handle);
           } else {
             //Root node
-            Either::Left(leaf.forget_type())
+            return Either::Left(leaf.forget_type());
           }
         }
         GoDown(handle) => {
           cur = handle.resolve_node();
-          handle = Some(handle);
+          cur_handle = Some(handle);
         }
         NotFound(node) => {
-          if let Some(parent_handle) = handle {
+          if let Some(parent_handle) = cur_handle {
             // Non root node
-            Either::Right(parent_handle)
+            return Either::Right(parent_handle);
           } else {
             //Root node
-            Either::Left(node.forget_type())
+            return Either::Left(node.forget_type());
           }
         }
       }
@@ -107,9 +107,9 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
   }
 }
 
-impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Leaf> {
+impl<BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, Leaf> {
   fn search_node(self, key: &[u8]) -> SearchResult<BorrowType, K, V> {
-    if self.prefix_len() >= key.len() && self.as_leaf_ref().partial_key().len() == 0 {
+    if self.prefix_len() >= key.len() && self.partial_key().len() == 0 {
       return Found(self);
     }
     let input_partial_prefix = &key[self.prefix_len()..];

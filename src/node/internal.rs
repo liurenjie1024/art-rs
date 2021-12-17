@@ -5,8 +5,9 @@ use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 use crate::node::InternalNodeImpl::{Node16, Node256, Node4, Node48};
 use crate::node::PartialPrefix::FixSized;
-use crate::node::{BoxedNode, NodeBase, NodeType};
+use crate::node::{BoxedNode, LeafNode, NodeBase, NodeType};
 use std::mem::swap;
+use std::ptr::NonNull;
 
 const MAX_PREFIX_LEN: usize = 16;
 
@@ -91,9 +92,11 @@ impl<K, V> InternalNodeBase<K, V> {
     self.partial_prefix.update(partial_key);
   }
 
-  pub(crate) unsafe fn set_leaf(&mut self, leaf_node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
-    assert!(leaf_node.as_ref().node_type.is_leaf());
-    swap(&mut self.leaf, Some(leaf_node))
+  pub(crate) unsafe fn set_leaf(
+    &mut self,
+    leaf_node: NonNull<LeafNode<K, V>>,
+  ) -> Option<BoxedNode<K, V>> {
+    swap(&mut self.leaf, Some(leaf_node.cast()))
   }
 
   pub(crate) fn get_leaf(&self) -> Option<BoxedNode<K, V>> {

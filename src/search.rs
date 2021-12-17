@@ -26,6 +26,11 @@ impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V
     }
   }
 
+  /// Search for node to insert.
+  ///
+  /// # Returns
+  ///
+  ///
   pub(crate) fn search_tree_for_insertion(
     self,
     key: K,

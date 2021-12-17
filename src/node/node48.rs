@@ -17,11 +17,15 @@ impl<K, V> Default for Node48Children<K, V> {
 impl<K, V> Children<K, V> for Node48Children<K, V> {
   const NODE_TYPE: NodeType = NodeType::Node48;
 
-  unsafe fn set_node_at(&mut self, _k: u8, _node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
+  unsafe fn set_child(&mut self, _k: u8, _node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
     todo!()
   }
 
-  fn child_at(&self, idx: usize) -> BoxedNode<K, V> {
+  unsafe fn set_child_at(&mut self, idx: usize, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
+    todo!()
+  }
+
+  fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
     todo!()
   }
 }

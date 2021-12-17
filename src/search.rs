@@ -1,6 +1,6 @@
 use crate::marker;
 use crate::marker::{Internal, InternalOrLeaf, Leaf};
-use crate::node::{Handle, NodeKind, NodeRef};
+use crate::node::{Handle, NodeImpl, NodeRef};
 use crate::search::SearchResult::{Found, GoDown, NotFound};
 use either::Either;
 use std::cmp::Ordering;
@@ -12,7 +12,7 @@ pub(crate) enum SearchResult<BorrowType, K, V> {
 }
 
 impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
-  pub(crate) fn search_tree(self, key: K) -> Option<NodeRef<BorrowType, K, V, Leaf>> {
+  pub(crate) fn search_tree(self, key: &K) -> Option<NodeRef<BorrowType, K, V, Leaf>> {
     let mut cur = self;
 
     loop {
@@ -61,11 +61,11 @@ impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V
   }
 }
 
-impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
+impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
   fn search_node(self, key: &[u8]) -> SearchResult<BorrowType, K, V> {
     match self.downcast() {
-      NodeKind::Internal(internal_ref) => internal_ref.search_node(key),
-      NodeKind::Leaf(leaf_ref) => leaf_ref.search_node(key),
+      NodeImpl::Internal(internal_ref) => internal_ref.search_node(key),
+      NodeImpl::Leaf(leaf_ref) => leaf_ref.search_node(key),
     }
   }
 }
@@ -77,12 +77,12 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
     }
 
     let input_partial_prefix = &key[self.prefix_len()..];
-    let this_partial_prefix = self.as_internal_ref().partial_prefix();
+    let this_partial_prefix = self.partial_key();
 
     if input_partial_prefix.len() > this_partial_prefix.len() {
       match &input_partial_prefix[0..this_partial_prefix.len()].cmp(this_partial_prefix) {
         Ordering::Equal => {
-          let new_prefix_len = self.prefix_len() + self.as_internal_ref().partial_prefix().len();
+          let new_prefix_len = self.prefix_len() + self.partial_key().len();
 
           let k = key[new_prefix_len];
 

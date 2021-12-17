@@ -9,9 +9,7 @@ pub struct ARTMap<K, V> {
 
 impl<K, V> ARTMap<K, V> {
   pub fn new() -> Self {
-    Self {
-      root: None,
-    }
+    Self { root: None }
   }
 
   pub fn get(&self, key: &K) -> Option<&V>
@@ -21,8 +19,8 @@ impl<K, V> ARTMap<K, V> {
     self
       .root
       .as_ref()?
-      .reborrow()
-      .search_tree(key.as_ref())
+      .borrow()
+      .search_tree(key)
       .map(|leaf| leaf.value_ref())
   }
 
@@ -31,11 +29,9 @@ impl<K, V> ARTMap<K, V> {
     K: AsRef<[u8]>,
   {
     self
-      .root
-      .as_mut()?
-      .borrow_mut()
-      .search_tree(key.as_ref())
-      .map(|leaf| leaf.value_mut())
+      .root?
+      .search_tree(key)
+      .map(|leaf| leaf.into_mut().value_mut())
   }
 
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
@@ -43,8 +39,8 @@ impl<K, V> ARTMap<K, V> {
     K: AsRef<[u8]>,
   {
     let (this_map, mut_ref) = DormantMutRef::new(self);
-    match this_map.root.as_mut().map(Root::borrow_mut) {
-      Some(node) => match node.search_tree_for_insertion(key.as_ref()) {
+    match this_map.root.as_mut().map(Root::into_mut) {
+      Some(node) => match node.search_tree_for_insertion(key) {
         Either::Left(leaf) => Entry::new_occupied(key, leaf),
         Either::Right(handle) => Entry::new_vacant(key, Either::Right(handle)),
       },

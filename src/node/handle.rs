@@ -1,5 +1,6 @@
 use crate::marker::{Internal, InternalOrLeaf};
 use crate::node::{BoxedNode, NodeRef};
+use std::ptr::NonNull;
 
 /// Position of a child node in internal node.
 pub(crate) enum NodePos {
@@ -28,7 +29,7 @@ impl<BorrowType, K, V> Handle<BorrowType, K, V> {
   /// Resolve the actual node reference this handle points to.
   pub(crate) fn resolve_node(&self) -> NodeRef<BorrowType, K, V, InternalOrLeaf> {
     match self.pos {
-      NodePos::Child(idx) => self.node.child_at(idx),
+      NodePos::Child(idx) => self.node.child_at(idx).unwrap(),
       NodePos::Leaf => self.node.get_leaf().unwrap().forget_type(),
     }
   }
@@ -45,20 +46,18 @@ impl<BorrowType, K, V> Handle<BorrowType, K, V> {
   ) -> Option<BoxedNode<K, V>> {
     match self.pos {
       NodePos::Child(idx) => {
-        assert!(new_node_ptr.as_ref().node_type.is_internal());
-        self
-          .node
-          .reborrow()
-          .as_internal_impl()
-          .set_child_at(idx, new_node_ptr)
+        debug_assert!(new_node_ptr.as_ref().node_type.is_internal());
+        unsafe { self.node.borrow_mut().set_child_at(idx, new_node_ptr) }
       }
       NodePos::Leaf => {
-        assert!(new_node_ptr.as_ref().node_type.is_leaf());
-        self
-          .node
-          .reborrow()
-          .as_internal_mut()
-          .set_leaf(new_node_ptr)
+        debug_assert!(new_node_ptr.as_ref().node_type.is_leaf());
+        unsafe {
+          self
+            .node
+            .borrow_mut()
+            .set_leaf(new_node_ptr.cast())
+            .map(NonNull::cast)
+        }
       }
     }
   }

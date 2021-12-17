@@ -5,7 +5,7 @@ use either::Either;
 
 use crate::common_len;
 use crate::marker::{Internal, Leaf, Mut, Owned};
-use crate::node::{Handle, InternalNode4, LeafNode, NodeKind, NodeRef};
+use crate::node::{Handle, InternalNode4, LeafNode, NodeImpl, NodeRef};
 
 impl<'a, K: AsRef<[u8]>, V> Handle<Mut<'a>, K, V> {
   /// Insert `key`, `value` into this node.
@@ -22,25 +22,30 @@ impl<'a, K: AsRef<[u8]>, V> Handle<Mut<'a>, K, V> {
   /// If same key already exists.
   pub(crate) fn insert_node(&mut self, key: K, value: V) -> NonNull<V> {
     let (new_node, leaf_value_ptr) = match self.resolve_node().downcast() {
-      NodeKind::Internal(internal) => match internal.insert_node(key, value) {
-        (Either::Left(origin_internal_node), leaf_value_ptr) => {
-          (unsafe { origin_internal_node.inner() }, leaf_value_ptr)
-        }
-        (Either::Right(new_internal_node), leaf_value_ptr) => {
-          (unsafe { new_internal_node.inner() }, leaf_value_ptr)
-        }
+      NodeImpl::Internal(internal) => match internal.insert_node(key, value) {
+        (Either::Left(origin_internal_node), leaf_value_ptr) => (
+          unsafe { origin_internal_node.into_boxed_node() },
+          leaf_value_ptr,
+        ),
+        (Either::Right(new_internal_node), leaf_value_ptr) => (
+          unsafe { new_internal_node.into_boxed_node() },
+          leaf_value_ptr,
+        ),
       },
-      NodeKind::Leaf(leaf) => {
+      NodeImpl::Leaf(leaf) => {
         let (new_node, leaf_value_ptr) = leaf.insert_node(key, value);
-        (unsafe { new_node.inner() }, leaf_value_ptr)
+        (unsafe { new_node.into_boxed_node() }, leaf_value_ptr)
       }
     };
 
+    unsafe {
+      self.replace_node(new_node);
+    }
     leaf_value_ptr
   }
 }
 
-impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
+impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
   /// Insert into current node.
   ///
   /// # Returns
@@ -52,7 +57,7 @@ impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
     key: K,
     value: V,
   ) -> (Either<Self, NodeRef<Owned, K, V, Internal>>, NonNull<V>) {
-    let this_partial_key = self.as_internal_ref().partial_prefix();
+    let this_partial_key = self.partial_key();
     let input_partial_key = &key.as_ref()[self.prefix_len()..];
 
     let common_key_len = common_len(this_partial_key, input_partial_key);
@@ -71,7 +76,7 @@ impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
         let mut new_leaf_node = LeafNode::new(key, value);
         let leaf_value_ptr = NonNull::from(new_leaf_node.value_mut());
         if let Some(_) =
-          unsafe { new_parent.set_child_at(new_k, NonNull::from(Box::leak(new_leaf_node)).cast()) }
+          unsafe { new_parent.set_child(new_k, NonNull::from(Box::leak(new_leaf_node)).cast()) }
         {
           unreachable!("This should not happen!");
         }
@@ -99,9 +104,9 @@ impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
           unsafe { from_raw_parts(slice.as_ptr(), slice.len()) }
         };
 
-        self.as_internal_mut().set_partial_key(new_partial_key);
+        self.set_partial_key(new_partial_key);
 
-        if let Some(_) = unsafe { new_parent.set_child_at(new_k, self.inner()) } {
+        if let Some(_) = unsafe { new_parent.set_child(new_k, self.into_boxed_node()) } {
           unreachable!("This should not happen!");
         }
       }
@@ -119,16 +124,15 @@ impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, Internal> {
       if common_key_len < input_partial_key.len() {
         let new_leaf_node_prefix_len = self.prefix_len() + common_key_len + 1;
         let new_k = input_partial_key[common_key_len];
-        if let Some(_) = unsafe {
-          self.as_internal_mut().insert_child(
-            new_k,
-            NodeRef::from_new_leaf_node(new_leaf_node_prefix_len, new_leaf_node).inner(),
-          )
-        } {
+        if let Some(_) =
+          unsafe { self.insert_child(new_k, NonNull::from(Box::leak(new_leaf_node)).cast()) }
+        {
           unreachable!("This should not happen!")
         }
       } else {
-        self.as_internal_mut().set_leaf(new_leaf_node);
+        if let Some(_) = unsafe { self.set_leaf(NonNull::from(Box::leak(new_leaf_node))) } {
+          unreachable!("This should not happen!")
+        }
       }
 
       (Either::Left(self), leaf_value_ptr)
@@ -156,7 +160,7 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
         let mut new_leaf = LeafNode::new(key, value);
         let leaf_value_ptr = NonNull::from(new_leaf.value_mut());
         unsafe {
-          new_parent.set_child_at(new_k, NonNull::from(Box::leak(new_leaf)).cast());
+          new_parent.set_child(new_k, NonNull::from(Box::leak(new_leaf)).cast());
         }
         leaf_value_ptr
       } else {
@@ -177,16 +181,21 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
         let new_k = this_partial_key[common_key_len];
         self.set_prefix_len(self.prefix_len() + common_key_len + 1);
         unsafe {
-          new_parent.set_child_at(new_k, self.inner());
+          new_parent.set_child(new_k, self.into_boxed_node());
         }
       } else {
         self.set_prefix_len(self.prefix_len() + common_key_len);
         unsafe {
-          new_parent.base_mut().set_leaf(self.inner().cast());
+          new_parent
+            .base_mut()
+            .set_leaf(self.into_boxed_node().cast());
         }
       }
     }
 
-    (NodeRef::from_new_internal_node(new_parent), leaf_value_ptr)
+    (
+      NodeRef::from_new_internal_node(self.prefix_len(), new_parent),
+      leaf_value_ptr,
+    )
   }
 }

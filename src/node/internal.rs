@@ -1,11 +1,15 @@
 use crate::common_len;
+use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut, Owned};
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
+use crate::node::Handle;
 use crate::node::InternalNodeImpl::{Node16, Node256, Node4, Node48};
-use crate::node::PartialPrefix::FixSized;
+use crate::node::NodeRef;
+use crate::node::PartialKey::FixSized;
 use crate::node::{BoxedNode, LeafNode, NodeBase, NodeType};
+use std::marker::PhantomData;
 use std::mem::swap;
 use std::ptr::NonNull;
 
@@ -17,15 +21,15 @@ pub(crate) struct Fixed {
   partial_prefix_len: usize,
 }
 
-pub(crate) enum PartialPrefix {
+pub(crate) enum PartialKey {
   FixSized(Fixed),
   VarSized(Vec<u8>),
 }
 
 pub(crate) struct InternalNodeBase<K, V> {
   node_base: NodeBase<K, V>,
-  partial_prefix: PartialPrefix,
-  leaf: Option<BoxedNode<K, V>>,
+  partial_key: PartialKey,
+  leaf: Option<NonNull<LeafNode<K, V>>>,
   children_count: u8,
 }
 
@@ -38,8 +42,9 @@ pub(crate) struct InternalNode<C, K, V> {
 pub(crate) trait Children<K, V>: Default {
   const NODE_TYPE: NodeType;
 
-  unsafe fn set_node_at(&mut self, k: u8, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>>;
-  fn child_at(&self, idx: usize) -> BoxedNode<K, V>;
+  unsafe fn set_child(&mut self, k: u8, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>>;
+  unsafe fn set_child_at(&mut self, idx: usize, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>>;
+  fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>>;
 }
 
 impl Fixed {
@@ -78,37 +83,31 @@ impl<K, V> InternalNodeBase<K, V> {
     debug_assert!(node_type.is_internal());
     Self {
       node_base: NodeBase::new(node_type),
-      partial_prefix: PartialPrefix::default(),
+      partial_key: PartialKey::default(),
       leaf: None,
       children_count: 0,
     }
   }
 
-  pub(crate) fn partial_prefix(&self) -> &[u8] {
-    self.partial_prefix.as_slice()
+  pub(crate) fn partial_key(&self) -> &[u8] {
+    self.partial_key.as_slice()
   }
 
   pub(crate) fn set_partial_key(&mut self, partial_key: &[u8]) {
-    self.partial_prefix.update(partial_key);
+    self.partial_key.update(partial_key);
   }
 
   pub(crate) unsafe fn set_leaf(
     &mut self,
     leaf_node: NonNull<LeafNode<K, V>>,
-  ) -> Option<BoxedNode<K, V>> {
-    swap(&mut self.leaf, Some(leaf_node.cast()))
+  ) -> Option<NonNull<LeafNode<K, V>>> {
+    let mut ret = Some(leaf_node.cast());
+    swap(&mut self.leaf, &mut ret);
+    ret
   }
 
-  pub(crate) fn get_leaf(&self) -> Option<BoxedNode<K, V>> {
+  pub(crate) fn get_leaf(&self) -> Option<NonNull<LeafNode<K, V>>> {
     self.leaf
-  }
-
-  pub(crate) unsafe fn insert_child(
-    &mut self,
-    _k: u8,
-    _node_ptr: BoxedNode<K, V>,
-  ) -> Option<BoxedNode<K, V>> {
-    todo!()
   }
 }
 
@@ -134,28 +133,36 @@ impl<K, V, C: Children<K, V>> InternalNode<C, K, V> {
   ///
   /// This method accepts a raw pointer and owns it afterwards. If a child node with same key
   /// already exists, it's returned and the caller has its ownership.
-  pub(crate) unsafe fn set_child_at(
+  pub(crate) unsafe fn set_child(
     &mut self,
     k: u8,
     node_ptr: BoxedNode<K, V>,
   ) -> Option<BoxedNode<K, V>> {
-    self.children.set_node_at(k, node_ptr)
+    self.children.set_child(k, node_ptr)
   }
 
-  pub(crate) fn child_at(&self, idx: usize) -> BoxedNode<K, V> {
+  pub(crate) unsafe fn set_child_at(
+    &mut self,
+    idx: usize,
+    node_ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
+    self.children.set_child_at(idx, node_ptr)
+  }
+
+  pub(crate) fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
     self.children.child_at(idx)
   }
 }
 
-impl PartialPrefix {
+impl PartialKey {
   fn common_prefix_len(&self, key: &[u8]) -> usize {
     common_len(self.as_slice(), key)
   }
 
   fn as_slice(&self) -> &[u8] {
     match self {
-      PartialPrefix::FixSized(prefix) => prefix.partial_prefix(),
-      PartialPrefix::VarSized(key) => key.as_slice(),
+      PartialKey::FixSized(prefix) => prefix.partial_prefix(),
+      PartialKey::VarSized(key) => key.as_slice(),
     }
   }
 
@@ -165,14 +172,14 @@ impl PartialPrefix {
 
   fn update(&mut self, new_partial_key: &[u8]) {
     match self {
-      PartialPrefix::FixSized(cur_key) => {
+      PartialKey::FixSized(cur_key) => {
         if new_partial_key.len() > MAX_PREFIX_LEN {
-          *self = PartialPrefix::VarSized(Vec::from(new_partial_key));
+          *self = PartialKey::VarSized(Vec::from(new_partial_key));
         } else {
           cur_key.update(new_partial_key);
         }
       }
-      PartialPrefix::VarSized(cur_key) => {
+      PartialKey::VarSized(cur_key) => {
         if new_partial_key.len() > MAX_PREFIX_LEN {
           cur_key.copy_from_slice(new_partial_key);
         } else {
@@ -184,9 +191,9 @@ impl PartialPrefix {
   }
 }
 
-impl Default for PartialPrefix {
+impl Default for PartialKey {
   fn default() -> Self {
-    PartialPrefix::FixSized(Fixed::default())
+    PartialKey::FixSized(Fixed::default())
   }
 }
 
@@ -208,7 +215,7 @@ impl Fixed {
 }
 
 impl<'a, K, V> InternalNodeImpl<'a, K, V> {
-  pub(crate) fn child_at(&self, idx: usize) -> BoxedNode<K, V> {
+  pub(crate) fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
     match self {
       Node4(n) => n.child_at(idx),
       Node16(n) => n.child_at(idx),
@@ -217,12 +224,125 @@ impl<'a, K, V> InternalNodeImpl<'a, K, V> {
     }
   }
 
-  pub(crate) fn set_child_at(&mut self, idx: usize, node_ptr: BoxedNode<K, V>) -> BoxedNode<K, V> {
+  unsafe fn set_child_at(
+    &mut self,
+    idx: usize,
+    node_ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
     match self {
       Node4(n) => n.set_child_at(idx, node_ptr),
       Node16(n) => n.set_child_at(idx, node_ptr),
       Node48(n) => n.set_child_at(idx, node_ptr),
       Node256(n) => n.set_child_at(idx, node_ptr),
+    }
+  }
+}
+
+impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
+  fn as_internal_ref(&self) -> &InternalNodeBase<K, V> {
+    debug_assert!(self.as_base_ref().node_type.is_internal());
+    // SAFETY: This is internal node.
+    unsafe { self.inner.cast().as_ref() }
+  }
+
+  fn as_internal_mut(&mut self) -> &mut InternalNodeBase<K, V> {
+    debug_assert!(self.as_base_ref().node_type.is_internal());
+    // SAFETY: This is internal node.
+    unsafe { self.inner.cast().as_mut() }
+  }
+
+  fn as_internal_impl(&self) -> InternalNodeImpl<'_, K, V> {
+    // SAFETY: This is internal node.
+    unsafe {
+      match self.as_base_ref().node_type {
+        NodeType::Node4 => {
+          InternalNodeImpl::Node4(self.inner.cast::<InternalNode4<K, V>>().as_ref())
+        }
+        NodeType::Node16 => {
+          InternalNodeImpl::Node16(self.inner.cast::<InternalNode16<K, V>>().as_ref())
+        }
+        NodeType::Node48 => {
+          InternalNodeImpl::Node48(self.inner.cast::<InternalNode48<K, V>>().as_ref())
+        }
+        NodeType::Node256 => {
+          InternalNodeImpl::Node256(self.inner.cast::<InternalNode256<K, V>>().as_ref())
+        }
+        NodeType::Leaf => panic!("This should not happen!"),
+      }
+    }
+  }
+
+  pub(crate) fn find_child(&self, _k: u8) -> Option<Handle<BorrowType, K, V>> {
+    todo!()
+  }
+
+  pub(crate) fn get_leaf(&self) -> Option<NodeRef<BorrowType, K, V, Leaf>> {
+    let internal_ref = self.as_internal_ref();
+    let leaf_prefix_len = self.prefix_len + internal_ref.partial_key().len();
+    internal_ref.get_leaf().map(|leaf_ptr| NodeRef {
+      inner: leaf_ptr.cast(),
+      prefix_len: leaf_prefix_len,
+      _marker: PhantomData,
+    })
+  }
+
+  pub(crate) fn child_at(&self, idx: usize) -> Option<NodeRef<BorrowType, K, V, InternalOrLeaf>> {
+    let internal_ref = self.as_internal_impl();
+    if let Some(child_ptr) = internal_ref.child_at(idx) {
+      let child_prefix_len = self.prefix_len + self.as_internal_ref().partial_key.len() + 1;
+      Some(NodeRef {
+        inner: child_ptr,
+        prefix_len: child_prefix_len,
+        _marker: PhantomData,
+      })
+    } else {
+      None
+    }
+  }
+
+  pub(crate) fn partial_key(&self) -> &[u8] {
+    self.as_internal_ref().partial_key()
+  }
+}
+
+impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
+  pub(crate) unsafe fn insert_child(
+    &mut self,
+    _k: u8,
+    _node_ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
+    todo!()
+  }
+
+  pub(crate) unsafe fn set_child_at(
+    &mut self,
+    idx: usize,
+    ptr: BoxedNode<K, V>,
+  ) -> Option<BoxedNode<K, V>> {
+    self.as_internal_impl().set_child_at(idx, ptr)
+  }
+
+  pub(crate) unsafe fn set_leaf(
+    &mut self,
+    ptr: NonNull<LeafNode<K, V>>,
+  ) -> Option<NonNull<LeafNode<K, V>>> {
+    self.as_internal_mut().set_leaf(ptr)
+  }
+
+  pub(crate) fn set_partial_key(&mut self, new_partial_key: &[u8]) {
+    self.as_internal_mut().set_partial_key(new_partial_key)
+  }
+}
+
+impl<K, V> NodeRef<Owned, K, V, Internal> {
+  pub(crate) fn from_new_internal_node<C>(
+    prefix_len: usize,
+    leaf: Box<InternalNode<C, K, V>>,
+  ) -> Self {
+    Self {
+      inner: NonNull::from(Box::leak(leaf)).cast(),
+      prefix_len,
+      _marker: PhantomData,
     }
   }
 }

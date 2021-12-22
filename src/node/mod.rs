@@ -1,13 +1,11 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-pub(crate) use handle::*;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
 
 use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut, Owned};
 
-mod handle;
 mod internal;
 mod node16;
 mod node256;
@@ -20,6 +18,7 @@ pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
 
 pub(crate) type Root<K, V> = NodeRef<Owned, K, V, InternalOrLeaf>;
 pub(crate) type BoxedNode<K, V> = NonNull<NodeBase<K, V>>;
+pub(crate) type Handle<K, V> = NonNull<Option<BoxedNode<K, V>>>;
 
 #[repr(u8)]
 pub(crate) enum NodeType {
@@ -40,6 +39,11 @@ pub(crate) struct NodeRef<BorrowType, K, V, NodeType> {
   inner: NonNull<NodeBase<K, V>>,
   /// Prefix length from root until this node.
   prefix_len: usize,
+  /// Pointer holding this node.
+  ///
+  /// For non-root node, this is the pointer in parent node.
+  /// For root node, this is the pointer in map.
+  holder: NonNull<Option<BoxedNode<K, V>>>,
   _marker: PhantomData<(BorrowType, NodeType)>,
 }
 
@@ -48,6 +52,7 @@ impl<'a, K, V, NodeType> Clone for NodeRef<Immut<'a>, K, V, NodeType> {
     Self {
       inner: self.inner,
       prefix_len: self.prefix_len,
+      holder: self.holder,
       _marker: PhantomData,
     }
   }
@@ -96,6 +101,7 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
     NodeRef {
       inner: self.inner,
       prefix_len: self.prefix_len,
+      holder: self.holder,
       _marker: PhantomData,
     }
   }
@@ -109,6 +115,7 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
     NodeRef {
       inner: self.inner,
       prefix_len: self.prefix_len,
+      holder: self.holder,
       _marker: PhantomData,
     }
   }
@@ -117,6 +124,7 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
     NodeRef {
       inner: self.inner,
       prefix_len: self.prefix_len,
+      holder: self.holder,
       _marker: PhantomData,
     }
   }
@@ -124,16 +132,31 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
   pub(crate) fn into_boxed_node(self) -> BoxedNode<K, V> {
     self.inner
   }
+
+  pub(crate) fn root_node_ref(ptr: BoxedNode<K, V>, holder: NonNull<Option<BoxedNode<K, V>>>) -> Self {
+    Self {
+      inner: ptr,
+      prefix_len: 0,
+      holder,
+      _marker: PhantomData,
+    }
+  }
 }
 
-impl<'a, K, V> NodeRef<Mut<'a>, K, V, NodeType> {
+impl<'a, K, V, NodeType> NodeRef<Mut<'a>, K, V, NodeType> {
   /// Temporarily takes out a mutable reference to the same node.
   pub(crate) fn reborrow(&mut self) -> NodeRef<Mut<'_>, K, V, NodeType> {
     NodeRef {
       inner: self.inner,
       prefix_len: self.prefix_len,
+      holder: self.holder,
       _marker: PhantomData,
     }
+  }
+
+  /// Write new pointer to holder of this node.
+  pub(crate) unsafe fn replace_holder(mut self, new_ptr: Option<BoxedNode<K, V>>) {
+    std::ptr::write(self.holder.as_ptr(), new_ptr)
   }
 }
 
@@ -149,23 +172,15 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
       NodeType::Leaf => NodeImpl::Leaf(NodeRef {
         inner: self.inner,
         prefix_len: self.prefix_len,
+        holder: self.holder,
         _marker: PhantomData,
       }),
       _ => NodeImpl::Internal(NodeRef {
         inner: self.inner,
         prefix_len: self.prefix_len,
+        holder: self.holder,
         _marker: PhantomData,
       }),
-    }
-  }
-}
-
-impl<K, V, NodeType> NodeRef<Owned, K, V, NodeType> {
-  pub(crate) fn into_mut(&self) -> NodeRef<Mut<'_>, K, V, NodeType> {
-    NodeRef {
-      inner: self.inner,
-      prefix_len: self.prefix_len,
-      _marker: PhantomData,
     }
   }
 }

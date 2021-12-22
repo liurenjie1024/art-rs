@@ -1,10 +1,13 @@
+use std::ptr::NonNull;
 use crate::entry::Entry;
-use crate::node::Root;
-use crate::DormantMutRef;
+use crate::node::{BoxedNode, NodeRef, Root};
+use crate::{DormantMutRef, marker};
 use either::Either;
+use crate::marker::{Immut, InternalOrLeaf, Mut};
+use crate::search::SearchResult;
 
 pub struct ARTMap<K, V> {
-  root: Option<Root<K, V>>,
+  root: Option<BoxedNode<K, V>>,
 }
 
 impl<K, V> ARTMap<K, V> {
@@ -13,44 +16,44 @@ impl<K, V> ARTMap<K, V> {
   }
 
   pub fn get(&self, key: &K) -> Option<&V>
-  where
-    K: AsRef<[u8]>,
+    where
+        K: AsRef<[u8]>,
   {
-    self
-      .root
-      .as_ref()?
-      .borrow()
-      .search_tree(key)
-      .map(|leaf| leaf.value_ref())
+    match self.root_node_ref()?.search_tree(key) {
+      SearchResult::Found(leaf) => Some(leaf.value_ref()),
+      SearchResult::NotFound(_) => None,
+      _ => unreachable!()
+    }
   }
 
   pub fn get_mut(&mut self, key: &K) -> Option<&mut V>
-  where
-    K: AsRef<[u8]>,
+    where
+        K: AsRef<[u8]>,
   {
-    self
-      .root?
-      .search_tree(key)
-      .map(|leaf| leaf.into_mut().value_mut())
+    match self.root_node_mut()?.search_tree(key) {
+      SearchResult::Found(leaf) => Some(leaf.value_mut()),
+      SearchResult::NotFound(_) => None,
+      _ => unreachable!()
+    }
   }
 
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
-  where
-    K: AsRef<[u8]>,
+    where
+        K: AsRef<[u8]>,
   {
-    let (this_map, mut_ref) = DormantMutRef::new(self);
-    match this_map.root.as_mut().map(Root::into_mut) {
-      Some(node) => match node.search_tree_for_insertion(key) {
-        Either::Left(leaf) => Entry::new_occupied(key, leaf),
-        Either::Right(handle) => Entry::new_vacant(key, Either::Right(handle)),
+    match self.root_node_mut() {
+      Some(node) => match node.search_tree(&key) {
+        SearchResult::Found(leaf) => Entry::new_occupied(key, leaf),
+        SearchResult::NotFound(node) => Entry::new_vacant(key, Either::Right(node)),
+        _ => unreachable!()
       },
-      None => Entry::new_vacant(key, Either::Left(mut_ref)),
+      None => Entry::new_vacant(key, Either::Left(NonNull::from(&mut self.root)))
     }
   }
 
   pub fn insert(&mut self, key: K, value: V) -> Option<V>
-  where
-    K: AsRef<[u8]>,
+    where
+        K: AsRef<[u8]>,
   {
     match self.entry(key) {
       Entry::Occupied(mut entry) => Some(entry.insert(value)),
@@ -62,21 +65,19 @@ impl<K, V> ARTMap<K, V> {
   }
 
   pub fn remove(&mut self, _key: &K) -> Option<V>
-  where
-    K: AsRef<[u8]>,
+    where
+        K: AsRef<[u8]>,
   {
     todo!()
   }
 }
 
 impl<K, V> ARTMap<K, V> {
-  /// Inits the root.
-  ///
-  /// # Panics
-  ///
-  /// If root is not `None`, we should panic.
-  pub(crate) unsafe fn init_root(&mut self, root: Root<K, V>) {
-    assert!(self.root.is_none());
-    self.root = Some(root);
+  fn root_node_ref(&self) -> Option<NodeRef<Immut<'_>, K, V, InternalOrLeaf>> {
+    self.root.map(|ptr| NodeRef::root_node_ref(ptr, NonNull::from(&self.root)))
+  }
+
+  fn root_node_mut(&mut self) -> Option<NodeRef<Mut<'_>, K, V, InternalOrLeaf>> {
+    self.root.map(|ptr| NodeRef::root_node_ref(ptr, NonNull::from(&self.root)))
   }
 }

@@ -94,12 +94,12 @@ impl<'a, K: 'a, V: 'a> NodeRef<Immut<'a>, K, V, Leaf> {
   }
 }
 
-impl<K, V> NodeRef<Owned, K, V, Leaf> {
-  pub(crate) fn from_new_leaf_node(prefix_len: usize, leaf: Box<LeafNode<K, V>>) -> Self {
-    Self {
-      inner: NonNull::from(Box::leak(leaf)).cast(),
-      prefix_len,
-      _marker: PhantomData,
-    }
-  }
-}
+// impl<K, V> NodeRef<Owned, K, V, Leaf> {
+//   pub(crate) fn from_new_leaf_node(prefix_len: usize, leaf: Box<LeafNode<K, V>>) -> Self {
+//     Self {
+//       inner: NonNull::from(Box::leak(leaf)).cast(),
+//       prefix_len,
+//       _marker: PhantomData,
+//     }
+//   }
+// }

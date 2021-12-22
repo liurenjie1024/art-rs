@@ -4,7 +4,6 @@ use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
-use crate::node::Handle;
 use crate::node::InternalNodeImpl::{Node16, Node256, Node4, Node48};
 use crate::node::NodeRef;
 use crate::node::PartialKey::FixSized;
@@ -272,7 +271,7 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
     }
   }
 
-  pub(crate) fn find_child(&self, _k: u8) -> Option<Handle<BorrowType, K, V>> {
+  pub(crate) fn find_child(&self, _k: u8) -> Option<NodeRef<BorrowType, K, V, InternalOrLeaf>> {
     todo!()
   }
 
@@ -282,23 +281,24 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
     internal_ref.get_leaf().map(|leaf_ptr| NodeRef {
       inner: leaf_ptr.cast(),
       prefix_len: leaf_prefix_len,
+      holder: NonNull::from(&internal_ref.leaf).cast(),
       _marker: PhantomData,
     })
   }
 
-  pub(crate) fn child_at(&self, idx: usize) -> Option<NodeRef<BorrowType, K, V, InternalOrLeaf>> {
-    let internal_ref = self.as_internal_impl();
-    if let Some(child_ptr) = internal_ref.child_at(idx) {
-      let child_prefix_len = self.prefix_len + self.as_internal_ref().partial_key.len() + 1;
-      Some(NodeRef {
-        inner: child_ptr,
-        prefix_len: child_prefix_len,
-        _marker: PhantomData,
-      })
-    } else {
-      None
-    }
-  }
+  // pub(crate) fn child_at(&self, idx: usize) -> Option<NodeRef<BorrowType, K, V, InternalOrLeaf>> {
+  //   let internal_ref = self.as_internal_impl();
+  //   if let Some(child_ptr) = internal_ref.child_at(idx) {
+  //     let child_prefix_len = self.prefix_len + self.as_internal_ref().partial_key.len() + 1;
+  //     Some(NodeRef {
+  //       inner: child_ptr,
+  //       prefix_len: child_prefix_len,
+  //       _marker: PhantomData,
+  //     })
+  //   } else {
+  //     None
+  //   }
+  // }
 
   pub(crate) fn partial_key(&self) -> &[u8] {
     self.as_internal_ref().partial_key()
@@ -337,11 +337,13 @@ impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
 impl<K, V> NodeRef<Owned, K, V, Internal> {
   pub(crate) fn from_new_internal_node<C>(
     prefix_len: usize,
+    holder: NonNull<Option<BoxedNode<K, V>>>,
     leaf: Box<InternalNode<C, K, V>>,
   ) -> Self {
     Self {
       inner: NonNull::from(Box::leak(leaf)).cast(),
       prefix_len,
+      holder,
       _marker: PhantomData,
     }
   }

@@ -1,76 +1,33 @@
+use std::cmp::Ordering;
+
 use crate::marker;
 use crate::marker::{Internal, InternalOrLeaf, Leaf};
-use crate::node::{Handle, NodeImpl, NodeRef};
+use crate::node::{NodeImpl, NodeRef};
 use crate::search::SearchResult::{Found, GoDown, NotFound};
-use either::Either;
-use std::cmp::Ordering;
 
 pub(crate) enum SearchResult<BorrowType, K, V> {
   Found(NodeRef<BorrowType, K, V, Leaf>),
-  GoDown(Handle<BorrowType, K, V>),
+  GoDown(NodeRef<BorrowType, K, V, InternalOrLeaf>),
   NotFound(NodeRef<BorrowType, K, V, InternalOrLeaf>),
 }
 
 impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
-  pub(crate) fn search_tree(self, key: &K) -> Option<NodeRef<BorrowType, K, V, Leaf>> {
+  pub(crate) fn search_tree(self, key: &K) -> SearchResult<BorrowType, K, V> {
     let mut cur = self;
 
     loop {
-      match cur.search_node(key.as_ref()) {
-        Found(leaf) => return Some(leaf),
-        GoDown(handle) => {
-          cur = handle.resolve_node();
-        }
-        NotFound(_) => return None,
-      }
-    }
-  }
-
-  /// Search for node to insert.
-  ///
-  /// # Returns
-  ///
-  ///
-  pub(crate) fn search_tree_for_insertion(
-    self,
-    key: K,
-  ) -> Either<NodeRef<BorrowType, K, V, InternalOrLeaf>, Handle<BorrowType, K, V>> {
-    let mut cur_handle = None;
-    let mut cur = self;
-    loop {
-      match cur.search_node(key.as_ref()) {
-        Found(leaf) => {
-          if let Some(parent_handle) = cur_handle {
-            // Non root node
-            return Either::Right(parent_handle);
-          } else {
-            //Root node
-            return Either::Left(leaf.forget_type());
+      match cur.downcast() {
+        NodeImpl::Internal(internal) => match internal.search_node(key.as_ref()) {
+          SearchResult::Found(node) => return SearchResult::Found(node),
+          SearchResult::GoDown(node) => {
+            cur = node;
           }
-        }
-        GoDown(handle) => {
-          cur = handle.resolve_node();
-          cur_handle = Some(handle);
-        }
-        NotFound(node) => {
-          if let Some(parent_handle) = cur_handle {
-            // Non root node
-            return Either::Right(parent_handle);
-          } else {
-            //Root node
-            return Either::Left(node.forget_type());
-          }
+          SearchResult::NotFound(ret) => return SearchResult::NotFound(ret)
+        },
+        NodeImpl::Leaf(leaf) => {
+          return leaf.search_node(key);
         }
       }
-    }
-  }
-}
-
-impl<BorrowType: marker::BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, InternalOrLeaf> {
-  fn search_node(self, key: &[u8]) -> SearchResult<BorrowType, K, V> {
-    match self.downcast() {
-      NodeImpl::Internal(internal_ref) => internal_ref.search_node(key),
-      NodeImpl::Leaf(leaf_ref) => leaf_ref.search_node(key),
     }
   }
 }
@@ -113,14 +70,16 @@ impl<BorrowType: marker::BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
 }
 
 impl<BorrowType, K: AsRef<[u8]>, V> NodeRef<BorrowType, K, V, Leaf> {
-  fn search_node(self, key: &[u8]) -> SearchResult<BorrowType, K, V> {
+  fn search_node(self, key: &K) -> SearchResult<BorrowType, K, V> {
+    let key = key.as_ref();
     if self.prefix_len() >= key.len() && self.partial_key().len() == 0 {
-      return Found(self);
+      return SearchResult::Found(self);
     }
     let input_partial_prefix = &key[self.prefix_len()..];
-    match input_partial_prefix.cmp(self.partial_key()) {
-      Ordering::Equal => Found(self),
-      _ => NotFound(self.forget_type()),
+    if input_partial_prefix == self.partial_key() {
+      SearchResult::Found(self)
+    } else {
+      SearchResult::NotFound(self.forget_type())
     }
   }
 }

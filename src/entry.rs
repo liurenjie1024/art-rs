@@ -1,10 +1,11 @@
 use either::Either;
 use std::mem;
+use std::ptr::NonNull;
 
 use crate::entry::Entry::{Occupied, Vacant};
 use crate::map::ARTMap;
-use crate::marker::{Leaf, Mut};
-use crate::node::{Handle, LeafNode, NodeRef};
+use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut};
+use crate::node::{BoxedNode, Handle, LeafNode, NodeRef};
 use crate::DormantMutRef;
 
 pub enum Entry<'a, K, V> {
@@ -14,8 +15,9 @@ pub enum Entry<'a, K, V> {
 
 pub struct VacantEntry<'a, K, V> {
   key: K,
-  /// Left when the tree is empty, and right when it's not.
-  handle: Either<DormantMutRef<'a, ARTMap<K, V>>, Handle<Mut<'a>, K, V>>,
+  /// When map is empty, it should be a pointer to new node.
+  /// When the map is not empty, it's a node ref.
+  node: Either<Handle<K, V>, NodeRef<Mut<'a>, K, V, InternalOrLeaf>>,
 }
 
 pub struct OccupiedEntry<'a, K, V> {
@@ -26,9 +28,9 @@ pub struct OccupiedEntry<'a, K, V> {
 impl<'a, K, V> Entry<'a, K, V> {
   pub(crate) fn new_vacant(
     key: K,
-    handle: Either<DormantMutRef<'a, ARTMap<K, V>>, Handle<Mut<'a>, K, V>>,
+    node: Either<Handle<K, V>, NodeRef<Mut<'a>, K, V, InternalOrLeaf>>,
   ) -> Self {
-    Entry::Vacant(VacantEntry { key, handle })
+    Entry::Vacant(VacantEntry { key, node })
   }
 
   pub(crate) fn new_occupied(key: K, node: NodeRef<Mut<'a>, K, V, Leaf>) -> Self {
@@ -95,18 +97,8 @@ impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
   }
 
   pub fn insert(self, value: V) -> &'a mut V {
-    match self.handle {
-      Either::Left(tree_ref) => {
-        // An empty tree, just create a node and modify root
-        let mut root = NodeRef::from_new_leaf_node(0, LeafNode::new(self.key, value));
-        // SAFETY: `DormantMutRef` only appears when tree is empty
-        let mut ptr = root.as_leaf_mut().value_ptr();
-        unsafe {
-          tree_ref.awaken().init_root(root.forget_type());
-          ptr.as_mut()
-        }
-      }
-      Either::Right(handle) => unsafe { handle.insert_node(self.key, value).as_mut() },
+    unsafe {
+      self.node.insert_node(self.key, value).as_mut()
     }
   }
 }

@@ -89,32 +89,35 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
 
         self.set_partial_key(new_partial_key);
 
-        if let Some(_) = unsafe { new_parent.set_child(new_k, self.into_boxed_node()) } {
+        if let Some(_) = unsafe { new_parent.set_child(new_k, self.get_inner()) } {
           unreachable!("This should not happen!");
+        }
+
+        unsafe {
+          self.replace_holder(Some(NonNull::from(Box::leak(new_parent)).cast()));
         }
       }
 
-      unsafe {
-        self.replace_holder(Some(NonNull::from(Box::leak(new_parent)).cast()));
-      }
       leaf_value_ptr
     } else {
-      let mut new_leaf_node = LeafNode::new(key, value);
-      let leaf_value_ptr = NonNull::from(new_leaf_node.value_mut());
       if common_key_len < input_partial_key.len() {
-        let new_leaf_node_prefix_len = self.prefix_len() + common_key_len + 1;
         let new_k = input_partial_key[common_key_len];
+        let mut new_leaf_node = LeafNode::new(key, value);
+        let leaf_value_ptr = NonNull::from(new_leaf_node.value_mut());
         if let Some(_) =
         unsafe { self.insert_child(new_k, NonNull::from(Box::leak(new_leaf_node)).cast()) }
         {
-          unreachable!("This should not happen!")
+          unreachable!()
         }
+        leaf_value_ptr
       } else {
+        let mut new_leaf_node = LeafNode::new(key, value);
+        let leaf_value_ptr = NonNull::from(new_leaf_node.value_mut());
         if let Some(_) = unsafe { self.set_leaf(NonNull::from(Box::leak(new_leaf_node))) } {
-          unreachable!("This should not happen!")
+          unreachable!()
         }
+        leaf_value_ptr
       }
-      leaf_value_ptr
     }
   }
 }
@@ -160,21 +163,19 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
         let new_k = this_partial_key[common_key_len];
         self.set_prefix_len(self.prefix_len() + common_key_len + 1);
         unsafe {
-          new_parent.set_child(new_k, self.into_boxed_node());
+          new_parent.set_child(new_k, self.get_inner());
         }
       } else {
         self.set_prefix_len(self.prefix_len() + common_key_len);
         unsafe {
           new_parent
               .base_mut()
-              .set_leaf(self.into_boxed_node().cast());
+              .set_leaf(self.get_inner().cast());
+          self.replace_holder(Some(NonNull::from(Box::leak(new_parent)).cast()));
         }
       }
     }
 
-    unsafe {
-      self.replace_holder(Some( NonNull::from(Box::leak(new_parent)).cast()));
-    }
     leaf_value_ptr
   }
 }

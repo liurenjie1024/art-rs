@@ -38,7 +38,7 @@ impl<'a, K, V> Entry<'a, K, V> {
   }
 }
 
-impl<'a, K: AsRef<[u8]>, V> Entry<'a, K, V> {
+impl<'a, K: AsRef<[u8]> + 'a, V: 'a> Entry<'a, K, V> {
   pub fn or_insert(self, value: V) -> &'a mut V {
     match self {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -87,7 +87,7 @@ impl<'a, K: AsRef<u8>, V: Default> Entry<'a, K, V> {
   }
 }
 
-impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
+impl<'a, K: AsRef<[u8]> + 'a, V: 'a> VacantEntry<'a, K, V> {
   pub fn key(&self) -> &K {
     &self.key
   }
@@ -97,8 +97,20 @@ impl<'a, K: AsRef<[u8]>, V> VacantEntry<'a, K, V> {
   }
 
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe {
-      self.node.insert_node(self.key, value).as_mut()
+    match self.node {
+      Either::Left(mut handle) => {
+        let new_leaf = LeafNode::new(self.key, value);
+        let mut leaf_node = NonNull::from(Box::leak(new_leaf));
+        unsafe {
+          std::ptr::write(handle.as_mut(), Some(leaf_node.cast()));
+          leaf_node.as_mut().value_mut()
+        }
+      }
+      Either::Right(node) => {
+        unsafe {
+          node.insert_node(self.key, value).as_mut()
+        }
+      }
     }
   }
 }

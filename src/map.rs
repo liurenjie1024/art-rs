@@ -41,13 +41,14 @@ impl<K, V> ARTMap<K, V> {
     where
         K: AsRef<[u8]>,
   {
-    match self.root_node_mut() {
+    let (map, dormant_ref) = DormantMutRef::new(self);
+    match map.root_node_mut() {
       Some(node) => match node.search_tree(&key) {
         SearchResult::Found(leaf) => Entry::new_occupied(key, leaf),
         SearchResult::NotFound(node) => Entry::new_vacant(key, Either::Right(node)),
         _ => unreachable!()
       },
-      None => Entry::new_vacant(key, Either::Left(NonNull::from(&mut self.root)))
+      None => Entry::new_vacant(key, Either::Left( NonNull::from(unsafe { &mut dormant_ref.awaken().root }) ))
     }
   }
 

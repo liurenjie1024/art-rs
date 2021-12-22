@@ -213,30 +213,6 @@ impl Fixed {
   }
 }
 
-impl<'a, K, V> InternalNodeImpl<'a, K, V> {
-  pub(crate) fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
-    match self {
-      Node4(n) => n.child_at(idx),
-      Node16(n) => n.child_at(idx),
-      Node48(n) => n.child_at(idx),
-      Node256(n) => n.child_at(idx),
-    }
-  }
-
-  unsafe fn set_child_at(
-    &mut self,
-    idx: usize,
-    node_ptr: BoxedNode<K, V>,
-  ) -> Option<BoxedNode<K, V>> {
-    match self {
-      Node4(n) => n.set_child_at(idx, node_ptr),
-      Node16(n) => n.set_child_at(idx, node_ptr),
-      Node48(n) => n.set_child_at(idx, node_ptr),
-      Node256(n) => n.set_child_at(idx, node_ptr),
-    }
-  }
-}
-
 impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
   fn as_internal_ref(&self) -> &InternalNodeBase<K, V> {
     debug_assert!(self.as_base_ref().node_type.is_internal());
@@ -312,14 +288,6 @@ impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
     _node_ptr: BoxedNode<K, V>,
   ) -> Option<BoxedNode<K, V>> {
     todo!()
-  }
-
-  pub(crate) unsafe fn set_child_at(
-    &mut self,
-    idx: usize,
-    ptr: BoxedNode<K, V>,
-  ) -> Option<BoxedNode<K, V>> {
-    self.as_internal_impl().set_child_at(idx, ptr)
   }
 
   pub(crate) unsafe fn set_leaf(

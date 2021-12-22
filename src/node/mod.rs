@@ -129,7 +129,7 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
     }
   }
 
-  pub(crate) fn into_boxed_node(self) -> BoxedNode<K, V> {
+  pub(crate) fn get_inner(&self) -> BoxedNode<K, V> {
     self.inner
   }
 

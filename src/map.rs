@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 use crate::entry::Entry;
-use crate::node::{BoxedNode, NodeRef, Root};
-use crate::{DormantMutRef, marker};
+use crate::node::{BoxedNode, NodeRef};
+use crate::{DormantMutRef};
 use either::Either;
 use crate::marker::{Immut, InternalOrLeaf, Mut};
 use crate::search::SearchResult;

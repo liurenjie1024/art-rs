@@ -1,10 +1,10 @@
 use std::ptr::NonNull;
 use std::slice::from_raw_parts;
 
-use either::Either;
+
 
 use crate::common_len;
-use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut, Owned};
+use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut};
 use crate::node::{InternalNode4, LeafNode, NodeImpl, NodeRef};
 
 impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, InternalOrLeaf> {
@@ -20,7 +20,7 @@ impl<'a, K: AsRef<[u8]>, V> NodeRef<Mut<'a>, K, V, InternalOrLeaf> {
   /// # Panics
   ///
   /// If same key already exists.
-  pub(crate) fn insert_node(mut self, key: K, value: V) -> NonNull<V> {
+  pub(crate) fn insert_node(self, key: K, value: V) -> NonNull<V> {
     match self.downcast() {
       NodeImpl::Internal(internal) => internal.insert_node(key, value),
       NodeImpl::Leaf(leaf) => leaf.insert_node(key, value)
@@ -51,7 +51,7 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
       new_parent
           .base_mut()
           .set_partial_key(&this_partial_key[0..common_key_len]);
-      let new_parent_prefix_len = self.prefix_len();
+      let _new_parent_prefix_len = self.prefix_len();
 
       // First create leaf node using new value
       let leaf_value_ptr = if common_key_len < input_partial_key.len() {
@@ -138,7 +138,7 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
     let leaf_value_ptr = {
       if common_key_len < input_partial_key.len() {
         let new_k = input_partial_key[common_key_len];
-        let new_prefix_len = self.prefix_len() + common_key_len + 1;
+        let _new_prefix_len = self.prefix_len() + common_key_len + 1;
         let mut new_leaf = LeafNode::new(key, value);
         let leaf_value_ptr = NonNull::from(new_leaf.value_mut());
         unsafe {

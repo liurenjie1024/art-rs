@@ -3,10 +3,10 @@ use std::mem;
 use std::ptr::NonNull;
 
 use crate::entry::Entry::{Occupied, Vacant};
-use crate::map::ARTMap;
-use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut};
-use crate::node::{BoxedNode, Handle, LeafNode, NodeRef};
-use crate::DormantMutRef;
+
+use crate::marker::{InternalOrLeaf, Leaf, Mut};
+use crate::node::{Handle, LeafNode, NodeRef};
+
 
 pub enum Entry<'a, K, V> {
   Vacant(VacantEntry<'a, K, V>),

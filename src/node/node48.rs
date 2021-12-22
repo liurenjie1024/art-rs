@@ -21,11 +21,11 @@ impl<K, V> Children<K, V> for Node48Children<K, V> {
     todo!()
   }
 
-  unsafe fn set_child_at(&mut self, idx: usize, node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
+  unsafe fn set_child_at(&mut self, _idx: usize, _node: BoxedNode<K, V>) -> Option<BoxedNode<K, V>> {
     todo!()
   }
 
-  fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
+  fn child_at(&self, _idx: usize) -> Option<BoxedNode<K, V>> {
     todo!()
   }
 }

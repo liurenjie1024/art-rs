@@ -155,7 +155,7 @@ impl<'a, K, V, NodeType> NodeRef<Mut<'a>, K, V, NodeType> {
   }
 
   /// Write new pointer to holder of this node.
-  pub(crate) unsafe fn replace_holder(mut self, new_ptr: Option<BoxedNode<K, V>>) {
+  pub(crate) unsafe fn replace_holder(self, new_ptr: Option<BoxedNode<K, V>>) {
     std::ptr::write(self.holder.as_ptr(), new_ptr)
   }
 }

@@ -4,7 +4,7 @@ use std::ptr::NonNull;
 pub(crate) use internal::*;
 pub(crate) use leaf::*;
 
-use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut, Owned};
+use crate::marker::{Immut, Internal, InternalOrLeaf, Leaf, Mut};
 
 mod internal;
 mod node16;
@@ -14,9 +14,6 @@ mod node48;
 
 mod leaf;
 
-pub(crate) const DEFAULT_TREE_DEPTH: usize = 16;
-
-pub(crate) type Root<K, V> = NodeRef<Owned, K, V, InternalOrLeaf>;
 pub(crate) type BoxedNode<K, V> = NonNull<NodeBase<K, V>>;
 pub(crate) type Handle<K, V> = NonNull<Option<BoxedNode<K, V>>>;
 
@@ -96,30 +93,6 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
     unsafe { self.inner.as_ref() }
   }
 
-  /// Temporarily takes out another immutable reference to the same node.
-  pub(crate) fn borrow(&self) -> NodeRef<Immut<'_>, K, V, NodeType> {
-    NodeRef {
-      inner: self.inner,
-      prefix_len: self.prefix_len,
-      holder: self.holder,
-      _marker: PhantomData,
-    }
-  }
-
-  /// Takes a mutable reference.
-  ///
-  /// # Safety
-  ///
-  /// It should only be borrowed once.
-  pub(crate) unsafe fn borrow_mut(&mut self) -> NodeRef<Mut<'_>, K, V, NodeType> {
-    NodeRef {
-      inner: self.inner,
-      prefix_len: self.prefix_len,
-      holder: self.holder,
-      _marker: PhantomData,
-    }
-  }
-
   pub(crate) fn forget_type(self) -> NodeRef<BorrowType, K, V, InternalOrLeaf> {
     NodeRef {
       inner: self.inner,
@@ -144,25 +117,9 @@ impl<BorrowType, K, V, NodeType> NodeRef<BorrowType, K, V, NodeType> {
 }
 
 impl<'a, K, V, NodeType> NodeRef<Mut<'a>, K, V, NodeType> {
-  /// Temporarily takes out a mutable reference to the same node.
-  pub(crate) fn reborrow(&mut self) -> NodeRef<Mut<'_>, K, V, NodeType> {
-    NodeRef {
-      inner: self.inner,
-      prefix_len: self.prefix_len,
-      holder: self.holder,
-      _marker: PhantomData,
-    }
-  }
-
   /// Write new pointer to holder of this node.
   pub(crate) unsafe fn replace_holder(self, new_ptr: Option<BoxedNode<K, V>>) {
     std::ptr::write(self.holder.as_ptr(), new_ptr)
-  }
-}
-
-impl<'a, K, V, NodeType> NodeRef<Mut<'a>, K, V, NodeType> {
-  fn as_base_mut(&mut self) -> &mut NodeBase<K, V> {
-    unsafe { self.inner.as_mut() }
   }
 }
 

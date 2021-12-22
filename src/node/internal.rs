@@ -139,25 +139,9 @@ impl<K, V, C: Children<K, V>> InternalNode<C, K, V> {
   ) -> Option<BoxedNode<K, V>> {
     self.children.set_child(k, node_ptr)
   }
-
-  pub(crate) unsafe fn set_child_at(
-    &mut self,
-    idx: usize,
-    node_ptr: BoxedNode<K, V>,
-  ) -> Option<BoxedNode<K, V>> {
-    self.children.set_child_at(idx, node_ptr)
-  }
-
-  pub(crate) fn child_at(&self, idx: usize) -> Option<BoxedNode<K, V>> {
-    self.children.child_at(idx)
-  }
 }
 
 impl PartialKey {
-  fn common_prefix_len(&self, key: &[u8]) -> usize {
-    common_len(self.as_slice(), key)
-  }
-
   fn as_slice(&self) -> &[u8] {
     match self {
       PartialKey::FixSized(prefix) => prefix.partial_prefix(),
@@ -299,20 +283,5 @@ impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
 
   pub(crate) fn set_partial_key(&mut self, new_partial_key: &[u8]) {
     self.as_internal_mut().set_partial_key(new_partial_key)
-  }
-}
-
-impl<K, V> NodeRef<Owned, K, V, Internal> {
-  pub(crate) fn from_new_internal_node<C>(
-    prefix_len: usize,
-    holder: NonNull<Option<BoxedNode<K, V>>>,
-    leaf: Box<InternalNode<C, K, V>>,
-  ) -> Self {
-    Self {
-      inner: NonNull::from(Box::leak(leaf)).cast(),
-      prefix_len,
-      holder,
-      _marker: PhantomData,
-    }
   }
 }

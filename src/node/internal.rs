@@ -1,5 +1,4 @@
-use crate::common_len;
-use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut, Owned};
+use crate::marker::{Internal, InternalOrLeaf, Leaf, Mut};
 use crate::node::node16::Node16Children;
 use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;

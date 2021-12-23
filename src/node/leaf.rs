@@ -86,6 +86,11 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
     debug_assert!(self.as_leaf_ref().key_ref().as_ref().len() >= new_prefix_len);
     self.prefix_len = new_prefix_len;
   }
+
+  pub(crate) fn into_kv(self) -> (K, V) {
+    let leaf = unsafe { Box::from_raw(self.inner.cast::<LeafNode<K, V>>().as_ptr()) };
+    (leaf.key, leaf.value)
+  }
 }
 
 impl<'a, K: 'a, V: 'a> NodeRef<Immut<'a>, K, V, Leaf> {

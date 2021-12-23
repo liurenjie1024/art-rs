@@ -14,15 +14,14 @@ pub enum Entry<'a, K, V> {
 }
 
 pub struct VacantEntry<'a, K, V> {
-  key: K,
+  pub(crate) key: K,
   /// When map is empty, it should be a pointer to new node.
   /// When the map is not empty, it's a node ref.
-  node: Either<Handle<K, V>, NodeRef<Mut<'a>, K, V, InternalOrLeaf>>,
+  pub(crate) node: Either<Handle<K, V>, NodeRef<Mut<'a>, K, V, InternalOrLeaf>>,
 }
 
 pub struct OccupiedEntry<'a, K, V> {
-  key: K,
-  node: NodeRef<Mut<'a>, K, V, Leaf>,
+  pub(crate) node: NodeRef<Mut<'a>, K, V, Leaf>,
 }
 
 impl<'a, K, V> Entry<'a, K, V> {
@@ -33,8 +32,8 @@ impl<'a, K, V> Entry<'a, K, V> {
     Entry::Vacant(VacantEntry { key, node })
   }
 
-  pub(crate) fn new_occupied(key: K, node: NodeRef<Mut<'a>, K, V, Leaf>) -> Self {
-    Entry::Occupied(OccupiedEntry { key, node })
+  pub(crate) fn new_occupied(node: NodeRef<Mut<'a>, K, V, Leaf>) -> Self {
+    Entry::Occupied(OccupiedEntry { node })
   }
 }
 
@@ -65,8 +64,8 @@ impl<'a, K: AsRef<[u8]> + 'a, V: 'a> Entry<'a, K, V> {
 
   pub fn key(&self) -> &K {
     match self {
-      Occupied(ref entry) => &entry.key,
-      Vacant(ref entry) => &entry.key,
+      Occupied(ref entry) => &entry.key(),
+      Vacant(ref entry) => &entry.key(),
     }
   }
 
@@ -117,7 +116,7 @@ impl<'a, K: AsRef<[u8]> + 'a, V: 'a> VacantEntry<'a, K, V> {
 
 impl<'a, K: AsRef<[u8]>, V> OccupiedEntry<'a, K, V> {
   pub fn key(&self) -> &K {
-    &self.key
+    self.node.as_leaf_ref().key_ref()
   }
 
   pub fn get(&self) -> &V {
@@ -134,5 +133,13 @@ impl<'a, K: AsRef<[u8]>, V> OccupiedEntry<'a, K, V> {
 
   pub fn insert(&mut self, value: V) -> V {
     mem::replace(self.get_mut(), value)
+  }
+
+  pub fn remove_kv(mut self) -> (K, V) {
+    // TODO: This is not enough, parent should change
+    unsafe {
+      self.node.replace_holder(None);
+    }
+    self.node.into_kv()
   }
 }

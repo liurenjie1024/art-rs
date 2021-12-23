@@ -1,5 +1,5 @@
 use std::ptr::NonNull;
-use crate::entry::Entry;
+use crate::entry::{Entry, OccupiedEntry};
 use crate::node::{BoxedNode, NodeRef};
 use crate::{DormantMutRef};
 use either::Either;
@@ -44,11 +44,11 @@ impl<K, V> ARTMap<K, V> {
     let (map, dormant_ref) = DormantMutRef::new(self);
     match map.root_node_mut() {
       Some(node) => match node.search_tree(&key) {
-        SearchResult::Found(leaf) => Entry::new_occupied(key, leaf),
+        SearchResult::Found(leaf) => Entry::new_occupied(leaf),
         SearchResult::NotFound(node) => Entry::new_vacant(key, Either::Right(node)),
         _ => unreachable!()
       },
-      None => Entry::new_vacant(key, Either::Left( NonNull::from(unsafe { &mut dormant_ref.awaken().root }) ))
+      None => Entry::new_vacant(key, Either::Left(NonNull::from(unsafe { &mut dormant_ref.awaken().root })))
     }
   }
 
@@ -65,11 +65,21 @@ impl<K, V> ARTMap<K, V> {
     }
   }
 
-  pub fn remove(&mut self, _key: &K) -> Option<V>
+  pub fn remove(&mut self, key: &K) -> Option<V>
     where
         K: AsRef<[u8]>,
   {
-    todo!()
+    self.remove_kv(key).map(|e| e.1)
+  }
+
+  pub fn remove_kv(&mut self, key: &K) -> Option<(K, V)>
+    where K: AsRef<[u8]>,
+  {
+    match self.root_node_mut()?.search_tree(key) {
+      SearchResult::Found(leaf) => Some(OccupiedEntry { node: leaf }.remove_kv()),
+      SearchResult::NotFound(_) => None,
+      _ => unreachable!()
+    }
   }
 }
 

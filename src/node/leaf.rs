@@ -2,7 +2,7 @@ use std::mem::swap;
 use std::ptr::NonNull;
 
 use crate::marker::{Immut, Leaf, Mut};
-use crate::node::NodeRef;
+use crate::node::{ChildPos, InternalNodeBase, NodeRef};
 use crate::node::{NodeBase, NodeType};
 
 
@@ -16,9 +16,17 @@ pub(crate) struct LeafNode<K, V> {
 }
 
 impl<K, V> LeafNode<K, V> {
-  pub(crate) fn new(key: K, value: V) -> Box<Self> {
+  pub(crate) fn new_root(key: K, value: V) -> Box<Self> {
     Box::new(Self {
-      node_base: NodeBase::new(NodeType::Leaf),
+      node_base: NodeBase::new_root(NodeType::Leaf),
+      key,
+      value,
+    })
+  }
+
+  pub(crate) fn new(parent: NonNull<InternalNodeBase<K, V>>, pos: ChildPos, key: K, value: V) -> Box<Self> {
+    Box::new(Self {
+      node_base: NodeBase::new(NodeType::Leaf, parent, pos),
       key,
       value,
     })

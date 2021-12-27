@@ -4,7 +4,7 @@ use crate::node::node256::Node256Children;
 use crate::node::node4::Node4Children;
 use crate::node::node48::Node48Children;
 
-use crate::node::NodeRef;
+use crate::node::{ChildPos, NodeRef};
 use crate::node::PartialKey::FixSized;
 use crate::node::{BoxedNode, LeafNode, NodeBase, NodeType};
 use std::marker::PhantomData;
@@ -63,6 +63,30 @@ pub(crate) type InternalNode16<K, V> = InternalNode<Node16Children<K, V>, K, V>;
 pub(crate) type InternalNode48<K, V> = InternalNode<Node48Children<K, V>, K, V>;
 pub(crate) type InternalNode256<K, V> = InternalNode<Node256Children<K, V>, K, V>;
 
+macro_rules! with_internal_node {
+  ($self: expr, $node: ident, $code: block) => {
+      match $self.as_base_ref().node_type {
+        NodeType::Node4 => {
+          let $node = unsafe { $self.inner.cast::<InternalNode4<K, V>>().as_mut() };
+          $code
+        }
+        NodeType::Node16 => {
+          let $node = unsafe { $self.inner.cast::<InternalNode16<K, V>>().as_mut() };
+          $code
+        }
+        NodeType::Node48 => {
+          let $node = unsafe { $self.inner.cast::<InternalNode48<K, V>>().as_mut() };
+          $code
+        }
+        NodeType::Node256 => {
+          let $node = unsafe { $self.inner.cast::<InternalNode256<K, V>>().as_mut() };
+          $code
+        }
+        NodeType::Leaf => panic!("This should not happen!"),
+      }
+  }
+}
+
 pub(crate) enum InternalNodeImpl<'a, K, V> {
   Node4(&'a InternalNode4<K, V>),
   Node16(&'a InternalNode16<K, V>),
@@ -71,22 +95,6 @@ pub(crate) enum InternalNodeImpl<'a, K, V> {
 }
 
 impl<K, V> InternalNodeBase<K, V> {
-  /// Creates an boxed internal node.
-  ///
-  /// # Safety
-  ///
-  /// A valid internal node should have at least one child, and this method doesn't enforce this
-  /// guarantee.
-  unsafe fn new(node_type: NodeType) -> Self {
-    debug_assert!(node_type.is_internal());
-    Self {
-      node_base: NodeBase::new(node_type),
-      partial_key: PartialKey::default(),
-      leaf: None,
-      children_count: 0,
-    }
-  }
-
   pub(crate) fn partial_key(&self) -> &[u8] {
     self.partial_key.as_slice()
   }
@@ -110,9 +118,26 @@ impl<K, V> InternalNodeBase<K, V> {
 }
 
 impl<K, V, C: Children<K, V>> InternalNode<C, K, V> {
-  pub(crate) unsafe fn new() -> Box<Self> {
+  pub(crate) unsafe fn new_root() -> Box<Self> {
     Box::new(Self {
-      base: InternalNodeBase::new(C::NODE_TYPE),
+      base: InternalNodeBase {
+        node_base: NodeBase::new_root(C::NODE_TYPE),
+        partial_key: PartialKey::default(),
+        leaf: None,
+        children_count: 0,
+      },
+      children: C::default(),
+    })
+  }
+
+  pub(crate) unsafe fn new(parent: NonNull<InternalNodeBase<K, V>>, child_pos: ChildPos) -> Box<Self> {
+    Box::new(Self {
+      base: InternalNodeBase {
+        node_base: NodeBase::new(C::NODE_TYPE, parent, child_pos),
+        partial_key: PartialKey::default(),
+        leaf: None,
+        children_count: 0,
+      },
       children: C::default(),
     })
   }
@@ -137,6 +162,11 @@ impl<K, V, C: Children<K, V>> InternalNode<C, K, V> {
     node_ptr: BoxedNode<K, V>,
   ) -> Option<BoxedNode<K, V>> {
     self.children.set_child(k, node_ptr)
+  }
+
+  pub(crate) unsafe fn set_child_at(&mut self, pos: ChildPos, node_ptr: Option<BoxedNode<K, V>>)
+                                    -> Option<BoxedNode<K, V>> {
+    todo!()
   }
 }
 
@@ -240,7 +270,6 @@ impl<BorrowType, K, V> NodeRef<BorrowType, K, V, Internal> {
     internal_ref.get_leaf().map(|leaf_ptr| NodeRef {
       inner: leaf_ptr.cast(),
       prefix_len: leaf_prefix_len,
-      holder: NonNull::from(&internal_ref.leaf).cast(),
       _marker: PhantomData,
     })
   }
@@ -283,4 +312,11 @@ impl<'a, K: 'a, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
   pub(crate) fn set_partial_key(&mut self, new_partial_key: &[u8]) {
     self.as_internal_mut().set_partial_key(new_partial_key)
   }
+
+  pub(super) unsafe fn update_child_at(&mut self, child_pos: ChildPos, ptr: Option<BoxedNode<K, V>>) -> Option<BoxedNode<K, V>> {
+    with_internal_node!(self, node, {
+      unsafe { node.set_child_at(child_pos, ptr) }
+    })
+  }
 }
+

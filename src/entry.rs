@@ -98,7 +98,7 @@ impl<'a, K: AsRef<[u8]> + 'a, V: 'a> VacantEntry<'a, K, V> {
   pub fn insert(self, value: V) -> &'a mut V {
     match self.node {
       Either::Left(mut handle) => {
-        let new_leaf = LeafNode::new(self.key, value);
+        let new_leaf = LeafNode::new_root(self.key, value);
         let mut leaf_node = NonNull::from(Box::leak(new_leaf));
         unsafe {
           std::ptr::write(handle.as_mut(), Some(leaf_node.cast()));
@@ -138,7 +138,7 @@ impl<'a, K: AsRef<[u8]>, V> OccupiedEntry<'a, K, V> {
   pub fn remove_kv(mut self) -> (K, V) {
     // TODO: This is not enough, parent should change
     unsafe {
-      self.node.replace_holder(None);
+      self.node.replace_self_in_parent(None);
     }
     self.node.into_kv()
   }

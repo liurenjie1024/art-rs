@@ -94,7 +94,7 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Internal> {
         }
 
         unsafe {
-          self.replace_holder(Some(NonNull::from(Box::leak(new_parent)).cast()));
+          self.replace_self_in_parent(Some(NonNull::from(Box::leak(new_parent)).cast()));
         }
       }
 
@@ -171,7 +171,7 @@ impl<'a, K: 'a + AsRef<[u8]>, V: 'a> NodeRef<Mut<'a>, K, V, Leaf> {
           new_parent
               .base_mut()
               .set_leaf(self.get_inner().cast());
-          self.replace_holder(Some(NonNull::from(Box::leak(new_parent)).cast()));
+          self.replace_self_in_parent(Some(NonNull::from(Box::leak(new_parent)).cast()));
         }
       }
     }
